@@ -58,7 +58,7 @@ pub struct Listener {
     pub index: usize,
 
     pub element: HtmlElement,
-    pub function: Closure<dyn Fn(MouseEvent)>,
+    pub function: Option<Closure<dyn Fn(MouseEvent)>>,
 
     pub data: SharedListenerData,
 
@@ -87,7 +87,7 @@ pub fn register(element: HtmlElement) -> Result<()> {
             index,
 
             element,
-            function: Closure::wrap(Box::new(move |_: MouseEvent| {}) as Box<dyn Fn(MouseEvent)>),
+            function: None,
             toolbar,
 
             data: listener_data,
@@ -102,7 +102,7 @@ pub fn register(element: HtmlElement) -> Result<()> {
         document()
             .add_event_listener_with_callback("mouseup", function.as_ref().unchecked_ref())?;
 
-        listener_rc.write().function = function;
+        listener_rc.write().function = Some(function);
 
         listeners.push(listener_rc);
 
