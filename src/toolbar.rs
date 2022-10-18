@@ -90,7 +90,7 @@ impl Toolbar {
     ) -> Result<()> {
         let element: HtmlElement = document().create_element("div")?.unchecked_into();
 
-        element.set_inner_text(C::title());
+        element.set_inner_text(C::TITLE);
         element.set_class_name("button");
 
         let function = Closure::wrap(Box::new(move || {
@@ -102,8 +102,6 @@ impl Toolbar {
                 let nodes = selection::get_nodes_in_selection(selection, &data).unwrap_throw();
 
                 component.on_select(nodes).unwrap_throw();
-
-                // log::debug!("{}", selection.to_string());
             }
         }) as Box<dyn Fn()>);
 

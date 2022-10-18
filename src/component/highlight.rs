@@ -5,9 +5,8 @@ use super::Component;
 pub struct Highlight;
 
 impl Component for Highlight {
-    fn title() -> &'static str {
-        "H"
-    }
+    const FLAG: ComponentFlag = ComponentFlag::HIGHLIGHT;
+    const TITLE: &'static str = "H";
 
     fn on_select(&self, nodes: NodeContainer) -> Result<()> {
         log::info!("Highlight");

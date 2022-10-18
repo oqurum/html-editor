@@ -11,6 +11,7 @@ use web_sys::{HtmlElement, MouseEvent, Text};
 
 use crate::{
     helper::{parents_contains_class, TargetCast},
+    node::join_node_into_surroundings,
     toolbar::Toolbar,
     ComponentFlag, ComponentNode, Result,
 };
@@ -47,10 +48,49 @@ impl ListenerData {
         self.nodes.iter().find(|v| &v.node == node)
     }
 
-    pub fn insert_component(&mut self, value: Text, flag: ComponentFlag) -> Result<()> {
-        self.nodes.push(ComponentNode::wrap(value, flag)?);
+    pub fn get_component_node_mut(&mut self, node: &Text) -> Option<&mut ComponentNode> {
+        self.nodes.iter_mut().find(|v| &v.node == node)
+    }
+
+    pub fn insert_or_update_component(&mut self, value: Text, flag: ComponentFlag) -> Result<()> {
+        if let Some(comp) = self.get_component_node_mut(&value) {
+            comp.add_flag(flag);
+        } else {
+            self.nodes.push(ComponentNode::wrap(value, flag)?);
+        }
 
         Ok(())
+    }
+
+    pub fn remove_component_node_flag(
+        &mut self,
+        node: &Text,
+        flag: ComponentFlag,
+    ) -> Result<Option<Text>> {
+        for (i, comp) in self.nodes.iter_mut().enumerate() {
+            if &comp.node == node {
+                comp.remove_flag(flag);
+
+                if comp.are_flags_empty() {
+                    let node = Self::handle_component_unwrap(self.nodes.swap_remove(i))?;
+                    return Ok(Some(node));
+                }
+
+                break;
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Unwrap the component and join Text Node into surrounding nodes of same type.
+    fn handle_component_unwrap(value: ComponentNode) -> Result<Text> {
+        let node = value.unwrap()?;
+
+        // Check the Nodes' surroundings for Nodes of the same type.
+        let node = join_node_into_surroundings(node)?;
+
+        Ok(node)
     }
 }
 

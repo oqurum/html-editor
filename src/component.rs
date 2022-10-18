@@ -8,9 +8,14 @@ use crate::{selection::NodeContainer, Result};
 pub static STYLING_PREFIX_CLASS: &str = "editor-styling";
 
 pub trait Component {
-    fn title() -> &'static str;
+    const TITLE: &'static str;
+    const FLAG: ComponentFlag;
 
     fn on_select(&self, nodes: NodeContainer) -> Result<()>;
+
+    fn does_selected_contain_self(nodes: &NodeContainer) -> bool {
+        nodes.does_selected_contain_flags(Self::FLAG)
+    }
 }
 
 bitflags! {

@@ -1,5 +1,6 @@
+use gloo_utils::window;
 use wasm_bindgen::JsCast;
-use web_sys::{Node, Selection, Text};
+use web_sys::{Node, Range, Selection, Text};
 
 use crate::{ComponentFlag, Result, SharedListenerData};
 
@@ -14,22 +15,80 @@ pub struct NodeContainer<'a> {
 
 impl<'a> NodeContainer<'a> {
     pub fn does_selected_contain_flags(&self, flag: ComponentFlag) -> bool {
-        //
+        let page_data = self.data.borrow();
 
-        false
+        self.nodes.iter().all(|node| {
+            page_data
+                .get_component_node(node)
+                .filter(|v| v.has_flag(flag))
+                .is_some()
+        })
     }
 
     pub fn toggle_selection(mut self, flag: ComponentFlag) -> Result<()> {
         self.acquire_selected_nodes()?;
 
-        let mut page_data = self.data.borrow_mut();
+        if self.does_selected_contain_flags(flag) {
+            log::debug!("unset component");
 
-        for text in self.nodes {
-            page_data.insert_component(text, flag)?;
+            let mut page_data = self.data.borrow_mut();
+
+            let mut nodes = Vec::new();
+
+            for text in self.nodes.drain(..) {
+                if let Some(node) = page_data.remove_component_node_flag(&text, flag)? {
+                    nodes.push(node);
+                }
+            }
+
+            self.nodes = nodes;
+        } else {
+            log::debug!("set component");
+
+            let mut page_data = self.data.borrow_mut();
+
+            for text in self.nodes.clone() {
+                page_data.insert_or_update_component(text, flag)?;
+            }
         }
+
+        self.reload_selection()?;
 
         Ok(())
     }
+
+    fn reload_selection(&self) -> Result<()> {
+        let selection = window().get_selection()?.unwrap();
+
+        selection.remove_all_ranges()?;
+
+        let range = Range::new()?;
+
+        if self.nodes.len() == 1 {
+            log::debug!("Range::select_node");
+
+            let start = &self.nodes[0];
+
+            // range.select_node_contents(start)?;
+
+            range.set_start(start, 0)?;
+            range.set_end(start, start.length())?;
+        } else if self.nodes.len() > 1 {
+            log::debug!("Range::set_start");
+
+            let start = &self.nodes[0];
+            let end = &self.nodes[self.nodes.len() - 1];
+
+            range.set_start(start, 0)?;
+            range.set_end(end, end.length())?;
+        }
+
+        selection.add_range(&range)?;
+
+        Ok(())
+    }
+
+    // TODO: Range::end_offset() can equal 0. If it does that means we should NOT push the Node to self.nodes.
 
     fn acquire_selected_nodes(&mut self) -> Result<()> {
         // We've selected inside a single node.
@@ -42,17 +101,21 @@ impl<'a> NodeContainer<'a> {
 
             let mut page_data = self.data.borrow_mut();
 
+            // TODO: Remove cloned. Quick mutable & immutable borrow error fix
             // If component node already exists.
-            if let Some(comp_node) = page_data.get_component_node(&node) {
+            if let Some(comp_node) = page_data.get_component_node(&node).cloned() {
+                log::info!("Node cached");
+
                 if self.end_offset != node.length() {
+                    log::info!(" - splitting end: {} != {}", self.end_offset, node.length());
                     let next_node = comp_node.split(self.end_offset)?;
                     page_data.nodes.push(next_node);
                 }
 
                 if self.start_offset != 0 {
-                    self.nodes.push(node.split_text(self.start_offset)?);
-
-                    // TODO: prefix Node Text
+                    log::info!(" - splitting start: {}", self.start_offset);
+                    let right_text = comp_node.split(self.start_offset)?;
+                    self.nodes.push(right_text.node);
                 } else {
                     self.nodes.push(node);
                 }
@@ -113,8 +176,7 @@ pub fn get_all_text_nodes_in_container(
         if container.node_type() == Node::TEXT_NODE {
             return vec![container.unchecked_into()];
         } else {
-            // TODO
-            panic!("Selected Non Text");
+            return return_all_text_nodes(&container);
         }
     }
 
@@ -160,4 +222,22 @@ pub fn get_all_text_nodes_in_container(
     find_inner(container, start_node, end_node, &mut false, &mut nodes);
 
     nodes
+}
+
+fn return_all_text_nodes(container: &Node) -> Vec<Text> {
+    let mut found = Vec::new();
+
+    let mut inside = container.first_child();
+
+    while let Some(container) = inside {
+        if container.node_type() == Node::TEXT_NODE {
+            found.push(container.clone().unchecked_into());
+        }
+
+        found.append(&mut return_all_text_nodes(&container));
+
+        inside = container.next_sibling();
+    }
+
+    found
 }
