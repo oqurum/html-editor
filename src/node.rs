@@ -26,6 +26,8 @@ impl ComponentNode {
 
     pub fn split(&self, index: u32) -> Result<Self> {
         let text_split = self.node.split_text(index)?;
+        // Move Text Split to outer container layer. It'll we wrapped with container
+        self.container.after_with_node_1(&text_split)?;
 
         Ok(Self {
             container: create_container(&text_split, self.flag)?,
@@ -35,9 +37,24 @@ impl ComponentNode {
     }
 
     pub fn unwrap(self) -> Result<Text> {
+        // TODO: If only the Text is selected (get_selection()) then the outer parent of self.container will be selected for a tick or two.
         self.container.replace_with_with_node_1(&self.node)?;
 
         Ok(self.node)
+    }
+
+    pub fn join(&mut self, other: Self) -> Result<()> {
+        other.remove();
+
+        if let Some(text) = other.node.text_content() {
+            self.node.append_data(&text)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn remove(&self) {
+        self.container.remove();
     }
 
     pub fn are_flags_empty(&self) -> bool {
@@ -79,7 +96,7 @@ fn create_container(text_node: &Text, flag: ComponentFlag) -> Result<HtmlElement
     Ok(container.unchecked_into())
 }
 
-/// Find and join Nodes' surroundings for Nodes of the same type.
+/// Find and join Nodes' of the same type.
 ///
 /// Returns the NEW text node or INSERTED text node
 pub(crate) fn join_node_into_surroundings(mut value: Text) -> Result<Text> {
@@ -111,4 +128,40 @@ pub(crate) fn join_node_into_surroundings(mut value: Text) -> Result<Text> {
     }
 
     Ok(value)
+}
+
+/// Find and join Component Nodes' of the same type.
+///
+/// Updates the
+pub(crate) fn join_component_node_into_surroundings(
+    mut value: ComponentNode,
+    nodes: &mut Vec<ComponentNode>,
+) -> Result<()> {
+    // Check the previous sibling
+    if let Some(prev_sib) = value.container.previous_sibling() {
+        if let Some(index) = nodes
+            .iter()
+            .position(|v| v.container.unchecked_ref::<Node>() == &prev_sib && value.flag == v.flag)
+        {
+            let mut prev_sib = nodes.remove(index);
+
+            prev_sib.join(value)?;
+
+            value = prev_sib;
+        }
+    }
+
+    // Check the next sibling
+    if let Some(next_sib) = value.container.next_sibling() {
+        if let Some(index) = nodes
+            .iter()
+            .position(|v| v.container.unchecked_ref::<Node>() == &next_sib && value.flag == v.flag)
+        {
+            value.join(nodes.remove(index))?;
+        }
+    }
+
+    nodes.push(value);
+
+    Ok(())
 }

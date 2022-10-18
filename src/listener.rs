@@ -11,7 +11,7 @@ use web_sys::{HtmlElement, MouseEvent, Text};
 
 use crate::{
     helper::{parents_contains_class, TargetCast},
-    node::join_node_into_surroundings,
+    node::{join_component_node_into_surroundings, join_node_into_surroundings},
     toolbar::Toolbar,
     ComponentFlag, ComponentNode, Result,
 };
@@ -53,10 +53,16 @@ impl ListenerData {
     }
 
     pub fn insert_or_update_component(&mut self, value: Text, flag: ComponentFlag) -> Result<()> {
-        if let Some(comp) = self.get_component_node_mut(&value) {
+        if let Some(index) = self.nodes.iter().position(|v| v.node == value) {
+            let mut comp = self.nodes.remove(index);
             comp.add_flag(flag);
+
+            join_component_node_into_surroundings(comp, &mut self.nodes)?;
         } else {
-            self.nodes.push(ComponentNode::wrap(value, flag)?);
+            join_component_node_into_surroundings(
+                ComponentNode::wrap(value, flag)?,
+                &mut self.nodes,
+            )?;
         }
 
         Ok(())

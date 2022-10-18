@@ -115,7 +115,9 @@ impl<'a> NodeContainer<'a> {
                 if self.start_offset != 0 {
                     log::info!(" - splitting start: {}", self.start_offset);
                     let right_text = comp_node.split(self.start_offset)?;
-                    self.nodes.push(right_text.node);
+
+                    self.nodes.push(right_text.node.clone());
+                    page_data.nodes.push(right_text);
                 } else {
                     self.nodes.push(node);
                 }
