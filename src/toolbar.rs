@@ -116,6 +116,7 @@ impl Toolbar {
     }
 }
 
+#[allow(dead_code)]
 pub struct Button {
     element: HtmlElement,
     function: Closure<dyn Fn()>,

@@ -1,3 +1,5 @@
+use std::mem;
+
 use gloo_utils::window;
 use wasm_bindgen::JsCast;
 use web_sys::{Node, Range, Selection, Text};
@@ -64,23 +66,24 @@ impl<'a> NodeContainer<'a> {
 
         let range = Range::new()?;
 
-        if self.nodes.len() == 1 {
-            log::debug!("Range::select_node");
+        match self.nodes.len().cmp(&1) {
+            std::cmp::Ordering::Equal => {
+                log::debug!("Range::select_node");
 
-            let start = &self.nodes[0];
+                range.select_node_contents(&self.nodes[0])?;
+            }
 
-            // range.select_node_contents(start)?;
+            std::cmp::Ordering::Greater => {
+                log::debug!("Range::set_start");
 
-            range.set_start(start, 0)?;
-            range.set_end(start, start.length())?;
-        } else if self.nodes.len() > 1 {
-            log::debug!("Range::set_start");
+                let start = &self.nodes[0];
+                let end = &self.nodes[self.nodes.len() - 1];
 
-            let start = &self.nodes[0];
-            let end = &self.nodes[self.nodes.len() - 1];
+                range.set_start(start, 0)?;
+                range.set_end(end, end.length())?;
+            }
 
-            range.set_start(start, 0)?;
-            range.set_end(end, end.length())?;
+            std::cmp::Ordering::Less => (),
         }
 
         selection.add_range(&range)?;
@@ -96,49 +99,72 @@ impl<'a> NodeContainer<'a> {
             return Ok(());
         } else if self.nodes.len() == 1 {
             let node = self.nodes.remove(0);
+            self.separate_node(node, Some(self.start_offset), Some(self.end_offset))?;
+        } else {
+            let nodes = mem::take(&mut self.nodes);
+            let node_count = nodes.len();
 
-            // TODO: Determine if we should remove white-space from the end of a text node.
+            for (i, node) in nodes.into_iter().enumerate() {
+                self.separate_node(
+                    node,
+                    (i == 0).then_some(self.start_offset),
+                    (i + 1 == node_count).then_some(self.end_offset),
+                )?;
+            }
+        }
 
-            let mut page_data = self.data.borrow_mut();
+        Ok(())
+    }
 
-            // TODO: Remove cloned. Quick mutable & immutable borrow error fix
-            // If component node already exists.
-            if let Some(comp_node) = page_data.get_component_node(&node).cloned() {
-                log::info!("Node cached");
+    fn separate_node(
+        &mut self,
+        node: Text,
+        start_offset: Option<u32>,
+        end_offset: Option<u32>,
+    ) -> Result<()> {
+        // TODO: Determine if we should remove white-space from the end of a text node.
 
-                if self.end_offset != node.length() {
-                    log::info!(" - splitting end: {} != {}", self.end_offset, node.length());
-                    let next_node = comp_node.split(self.end_offset)?;
+        let mut page_data = self.data.borrow_mut();
+
+        // TODO: Remove cloned. Quick mutable & immutable borrow error fix
+        // If component node already exists.
+        if let Some(comp_node) = page_data.get_component_node(&node).cloned() {
+            log::debug!("Node cached");
+
+            if let Some(end_offset) = end_offset {
+                if end_offset != node.length() {
+                    log::debug!(" - splitting end: {} != {}", end_offset, node.length());
+
+                    let next_node = comp_node.split(end_offset)?;
                     page_data.nodes.push(next_node);
                 }
+            }
 
-                if self.start_offset != 0 {
-                    log::info!(" - splitting start: {}", self.start_offset);
-                    let right_text = comp_node.split(self.start_offset)?;
+            if let Some(start_offset) = start_offset.filter(|v| *v != 0) {
+                log::debug!(" - splitting start: {}", start_offset);
 
-                    self.nodes.push(right_text.node.clone());
-                    page_data.nodes.push(right_text);
-                } else {
-                    self.nodes.push(node);
-                }
+                let right_text = comp_node.split(start_offset)?;
+
+                self.nodes.push(right_text.node.clone());
+                page_data.nodes.push(right_text);
             } else {
-                // If we didn't select the full Text Node.
-                if self.end_offset != node.length() {
-                    // We don't need the Text after the split
-                    node.split_text(self.end_offset)?;
-                }
-
-                if self.start_offset != 0 {
-                    self.nodes.push(node.split_text(self.start_offset)?);
-
-                    // TODO: prefix Node Text
-                } else {
-                    self.nodes.push(node);
-                }
+                self.nodes.push(node);
             }
         } else {
-            if self.start_offset != 0 {
-                //
+            if let Some(end_offset) = end_offset {
+                // If we didn't select the full Text Node.
+                if end_offset != node.length() {
+                    // We don't need the Text after the split
+                    node.split_text(end_offset)?;
+                }
+            }
+
+            if let Some(start_offset) = start_offset.filter(|v| *v != 0) {
+                self.nodes.push(node.split_text(start_offset)?);
+
+                // TODO: prefix Node Text
+            } else {
+                self.nodes.push(node);
             }
         }
 

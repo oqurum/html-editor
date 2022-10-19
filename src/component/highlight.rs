@@ -9,9 +9,9 @@ impl Component for Highlight {
     const TITLE: &'static str = "H";
 
     fn on_select(&self, nodes: NodeContainer) -> Result<()> {
-        log::info!("Highlight");
+        log::debug!("Highlight");
 
-        nodes.toggle_selection(ComponentFlag::HIGHLIGHT)?;
+        nodes.toggle_selection(Self::FLAG)?;
 
         Ok(())
     }
