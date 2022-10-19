@@ -1,7 +1,10 @@
-mod highlight;
-
 use bitflags::bitflags;
+
+mod highlight;
+mod underline;
+
 pub use highlight::*;
+pub use underline::*;
 
 use crate::{selection::NodeContainer, Result};
 
@@ -14,7 +17,7 @@ pub trait Component {
     fn on_select(&self, nodes: NodeContainer) -> Result<()>;
 
     fn does_selected_contain_self(nodes: &NodeContainer) -> bool {
-        nodes.does_selected_contain_flags(Self::FLAG)
+        nodes.does_selected_contain_any(Self::FLAG)
     }
 }
 
@@ -22,7 +25,7 @@ bitflags! {
     pub struct ComponentFlag: u32 {
         const ANCHOR = 0b00000001;
         const HIGHLIGHT = 0b00000010;
-        const UNDERSCORE = 0b00000100;
+        const UNDERLINE = 0b00000100;
     }
 }
 
@@ -38,8 +41,8 @@ impl ComponentFlag {
             classes.push("highlight");
         }
 
-        if self.contains(Self::UNDERSCORE) {
-            classes.push("underscore");
+        if self.contains(Self::UNDERLINE) {
+            classes.push("underline");
         }
 
         classes.join(" ")

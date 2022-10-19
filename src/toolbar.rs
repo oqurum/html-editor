@@ -3,7 +3,7 @@ use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent};
 
 use crate::{
-    component::{Component, Highlight},
+    component::{Component, Highlight, Underline},
     listener::SharedListenerData,
     selection, Result,
 };
@@ -79,6 +79,7 @@ impl Toolbar {
         self.mouse_down_listener = Some(ignore_mouse_down);
 
         self.create_button(Highlight, data.clone())?;
+        self.create_button(Underline, data.clone())?;
 
         Ok(())
     }

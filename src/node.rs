@@ -133,7 +133,7 @@ pub(crate) fn join_node_into_surroundings(mut value: Text) -> Result<Text> {
 /// Find and join Component Nodes' of the same type.
 ///
 /// Updates the
-pub(crate) fn join_component_node_into_surroundings(
+pub(crate) fn try_join_component_into_surroundings(
     mut value: ComponentNode,
     nodes: &mut Vec<ComponentNode>,
 ) -> Result<()> {

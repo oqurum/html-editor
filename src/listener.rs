@@ -11,7 +11,7 @@ use web_sys::{HtmlElement, MouseEvent, Text};
 
 use crate::{
     helper::{parents_contains_class, TargetCast},
-    node::{join_component_node_into_surroundings, join_node_into_surroundings},
+    node::{join_node_into_surroundings, try_join_component_into_surroundings},
     toolbar::Toolbar,
     ComponentFlag, ComponentNode, Result,
 };
@@ -57,9 +57,9 @@ impl ListenerData {
             let mut comp = self.nodes.remove(index);
             comp.add_flag(flag);
 
-            join_component_node_into_surroundings(comp, &mut self.nodes)?;
+            try_join_component_into_surroundings(comp, &mut self.nodes)?;
         } else {
-            join_component_node_into_surroundings(
+            try_join_component_into_surroundings(
                 ComponentNode::wrap(value, flag)?,
                 &mut self.nodes,
             )?;
@@ -73,16 +73,16 @@ impl ListenerData {
         node: &Text,
         flag: ComponentFlag,
     ) -> Result<Option<Text>> {
-        for (i, comp) in self.nodes.iter_mut().enumerate() {
-            if &comp.node == node {
-                comp.remove_flag(flag);
+        if let Some(index) = self.nodes.iter().position(|v| &v.node == node) {
+            let mut comp = self.nodes.swap_remove(index);
 
-                if comp.are_flags_empty() {
-                    let node = Self::handle_component_unwrap(self.nodes.swap_remove(i))?;
-                    return Ok(Some(node));
-                }
+            comp.remove_flag(flag);
 
-                break;
+            if comp.are_flags_empty() {
+                let node = Self::handle_component_unwrap(comp)?;
+                return Ok(Some(node));
+            } else {
+                try_join_component_into_surroundings(comp, &mut self.nodes)?;
             }
         }
 

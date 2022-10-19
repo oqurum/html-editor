@@ -16,10 +16,10 @@ pub struct NodeContainer<'a> {
 }
 
 impl<'a> NodeContainer<'a> {
-    pub fn does_selected_contain_flags(&self, flag: ComponentFlag) -> bool {
+    pub fn does_selected_contain_any(&self, flag: ComponentFlag) -> bool {
         let page_data = self.data.borrow();
 
-        self.nodes.iter().all(|node| {
+        self.nodes.iter().any(|node| {
             page_data
                 .get_component_node(node)
                 .filter(|v| v.has_flag(flag))
@@ -28,9 +28,9 @@ impl<'a> NodeContainer<'a> {
     }
 
     pub fn toggle_selection(mut self, flag: ComponentFlag) -> Result<()> {
-        self.acquire_selected_nodes()?;
+        self.split_and_acq_text_nodes()?;
 
-        if self.does_selected_contain_flags(flag) {
+        if self.does_selected_contain_any(flag) {
             log::debug!("unset component");
 
             let mut page_data = self.data.borrow_mut();
@@ -93,19 +93,19 @@ impl<'a> NodeContainer<'a> {
 
     // TODO: Range::end_offset() can equal 0. If it does that means we should NOT push the Node to self.nodes.
 
-    fn acquire_selected_nodes(&mut self) -> Result<()> {
+    fn split_and_acq_text_nodes(&mut self) -> Result<()> {
         // We've selected inside a single node.
         if self.nodes.is_empty() {
             return Ok(());
         } else if self.nodes.len() == 1 {
             let node = self.nodes.remove(0);
-            self.separate_node(node, Some(self.start_offset), Some(self.end_offset))?;
+            self.separate_text_node(node, Some(self.start_offset), Some(self.end_offset))?;
         } else {
             let nodes = mem::take(&mut self.nodes);
             let node_count = nodes.len();
 
             for (i, node) in nodes.into_iter().enumerate() {
-                self.separate_node(
+                self.separate_text_node(
                     node,
                     (i == 0).then_some(self.start_offset),
                     (i + 1 == node_count).then_some(self.end_offset),
@@ -116,7 +116,7 @@ impl<'a> NodeContainer<'a> {
         Ok(())
     }
 
-    fn separate_node(
+    fn separate_text_node(
         &mut self,
         node: Text,
         start_offset: Option<u32>,
