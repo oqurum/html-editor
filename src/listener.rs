@@ -13,7 +13,7 @@ use crate::{
     helper::{parents_contains_class, TargetCast},
     node::{join_node_into_surroundings, try_join_component_into_surroundings},
     toolbar::Toolbar,
-    ComponentFlag, ComponentNode, Result,
+    ComponentFlag, ComponentNode, Result, selection::SplitText,
 };
 
 type SharedListenerType = Rc<RefCell<Listener>>;
@@ -52,15 +52,15 @@ impl ListenerData {
         self.nodes.iter_mut().find(|v| &v.node == node)
     }
 
-    pub fn insert_or_update_component(&mut self, value: Text, flag: ComponentFlag) -> Result<()> {
-        if let Some(index) = self.nodes.iter().position(|v| v.node == value) {
+    pub fn insert_or_update_component(&mut self, split: SplitText, flag: ComponentFlag) -> Result<()> {
+        if let Some(index) = self.nodes.iter().position(|v| v.node == split.text) {
             let mut comp = self.nodes.remove(index);
             comp.add_flag(flag);
 
             try_join_component_into_surroundings(comp, &mut self.nodes)?;
         } else {
             try_join_component_into_surroundings(
-                ComponentNode::wrap(value, flag)?,
+                ComponentNode::wrap(split.text, split.offset, flag)?,
                 &mut self.nodes,
             )?;
         }
@@ -72,15 +72,17 @@ impl ListenerData {
         &mut self,
         node: &Text,
         flag: ComponentFlag,
-    ) -> Result<Option<Text>> {
+    ) -> Result<Option<SplitText>> {
         if let Some(index) = self.nodes.iter().position(|v| &v.node == node) {
             let mut comp = self.nodes.swap_remove(index);
 
             comp.remove_flag(flag);
 
             if comp.are_flags_empty() {
-                let node = Self::handle_component_unwrap(comp)?;
-                return Ok(Some(node));
+                let offset = comp.offset;
+                let text = Self::handle_component_unwrap(comp)?;
+
+                return Ok(Some(SplitText { text, offset, }));
             } else {
                 try_join_component_into_surroundings(comp, &mut self.nodes)?;
             }

@@ -1,15 +1,14 @@
 use std::mem;
 
 use gloo_utils::window;
-use wasm_bindgen::JsCast;
-use web_sys::{Node, Range, Selection, Text};
+use web_sys::{Range, Selection, Text};
 
-use crate::{ComponentFlag, Result, SharedListenerData};
+use crate::{ComponentFlag, Result, SharedListenerData, node::get_all_text_nodes_in_container};
 
 pub struct NodeContainer<'a> {
     data: &'a SharedListenerData,
 
-    nodes: Vec<Text>,
+    nodes: Vec<SplitText>,
 
     start_offset: u32,
     end_offset: u32,
@@ -19,9 +18,9 @@ impl<'a> NodeContainer<'a> {
     pub fn does_selected_contain_any(&self, flag: ComponentFlag) -> bool {
         let page_data = self.data.borrow();
 
-        self.nodes.iter().any(|node| {
+        self.nodes.iter().any(|split| {
             page_data
-                .get_component_node(node)
+                .get_component_node(&split.text)
                 .filter(|v| v.has_flag(flag))
                 .is_some()
         })
@@ -37,9 +36,9 @@ impl<'a> NodeContainer<'a> {
 
             let mut nodes = Vec::new();
 
-            for text in self.nodes.drain(..) {
-                if let Some(node) = page_data.remove_component_node_flag(&text, flag)? {
-                    nodes.push(node);
+            for split in self.nodes.drain(..) {
+                if let Some(split) = page_data.remove_component_node_flag(&split.text, flag)? {
+                    nodes.push(split);
                 }
             }
 
@@ -49,8 +48,8 @@ impl<'a> NodeContainer<'a> {
 
             let mut page_data = self.data.borrow_mut();
 
-            for text in self.nodes.clone() {
-                page_data.insert_or_update_component(text, flag)?;
+            for split in self.nodes.clone() {
+                page_data.insert_or_update_component(split, flag)?;
             }
         }
 
@@ -70,14 +69,14 @@ impl<'a> NodeContainer<'a> {
             std::cmp::Ordering::Equal => {
                 log::debug!("Range::select_node");
 
-                range.select_node_contents(&self.nodes[0])?;
+                range.select_node_contents(&self.nodes[0].text)?;
             }
 
             std::cmp::Ordering::Greater => {
                 log::debug!("Range::set_start");
 
-                let start = &self.nodes[0];
-                let end = &self.nodes[self.nodes.len() - 1];
+                let start = &self.nodes[0].text;
+                let end = &self.nodes[self.nodes.len() - 1].text;
 
                 range.set_start(start, 0)?;
                 range.set_end(end, end.length())?;
@@ -98,15 +97,15 @@ impl<'a> NodeContainer<'a> {
         if self.nodes.is_empty() {
             return Ok(());
         } else if self.nodes.len() == 1 {
-            let node = self.nodes.remove(0);
-            self.separate_text_node(node, Some(self.start_offset), Some(self.end_offset))?;
+            let split = self.nodes.remove(0);
+            self.separate_text_node(split, Some(self.start_offset), Some(self.end_offset))?;
         } else {
             let nodes = mem::take(&mut self.nodes);
             let node_count = nodes.len();
 
-            for (i, node) in nodes.into_iter().enumerate() {
+            for (i, split) in nodes.into_iter().enumerate() {
                 self.separate_text_node(
-                    node,
+                    split,
                     (i == 0).then_some(self.start_offset),
                     (i + 1 == node_count).then_some(self.end_offset),
                 )?;
@@ -118,7 +117,7 @@ impl<'a> NodeContainer<'a> {
 
     fn separate_text_node(
         &mut self,
-        node: Text,
+        split: SplitText,
         start_offset: Option<u32>,
         end_offset: Option<u32>,
     ) -> Result<()> {
@@ -128,12 +127,12 @@ impl<'a> NodeContainer<'a> {
 
         // TODO: Remove cloned. Quick mutable & immutable borrow error fix
         // If component node already exists.
-        if let Some(comp_node) = page_data.get_component_node(&node).cloned() {
+        if let Some(comp_node) = page_data.get_component_node(&split.text).cloned() {
             log::debug!("Node cached");
 
             if let Some(end_offset) = end_offset {
-                if end_offset != node.length() {
-                    log::debug!(" - splitting end: {} != {}", end_offset, node.length());
+                if end_offset != split.length() {
+                    log::debug!(" - splitting end: {} != {}", end_offset, split.length());
 
                     let next_node = comp_node.split(end_offset)?;
                     page_data.nodes.push(next_node);
@@ -145,32 +144,55 @@ impl<'a> NodeContainer<'a> {
 
                 let right_text = comp_node.split(start_offset)?;
 
-                self.nodes.push(right_text.node.clone());
+                self.nodes.push(SplitText { text: right_text.node.clone(), offset: right_text.offset });
                 page_data.nodes.push(right_text);
             } else {
-                self.nodes.push(node);
+                self.nodes.push(split);
             }
         } else {
             if let Some(end_offset) = end_offset {
                 // If we didn't select the full Text Node.
-                if end_offset != node.length() {
+                if end_offset != split.length() {
                     // We don't need the Text after the split
-                    node.split_text(end_offset)?;
+                    let _ = split.split(end_offset)?;
                 }
             }
 
             if let Some(start_offset) = start_offset.filter(|v| *v != 0) {
-                self.nodes.push(node.split_text(start_offset)?);
+                self.nodes.push(split.split(start_offset)?);
 
                 // TODO: prefix Node Text
             } else {
-                self.nodes.push(node);
+                self.nodes.push(split);
             }
         }
 
         Ok(())
     }
 }
+
+
+#[derive(Clone)]
+pub struct SplitText {
+    pub text: Text,
+    pub offset: u32,
+}
+
+impl SplitText {
+    pub fn length(&self) -> u32 {
+        self.text.length()
+    }
+
+    pub fn split(&self, index: u32) -> Result<Self> {
+        let text_split = self.text.split_text(index)?;
+
+        Ok(Self {
+            text: text_split,
+            offset: self.offset + index,
+        })
+    }
+}
+
 
 pub fn get_nodes_in_selection(
     selection: Selection,
@@ -193,79 +215,4 @@ pub fn get_nodes_in_selection(
         start_offset: range.start_offset()?,
         end_offset: range.end_offset()?,
     })
-}
-
-pub fn get_all_text_nodes_in_container(
-    container: Node,
-    start_node: &Node,
-    end_node: &Node,
-) -> Vec<Text> {
-    if start_node == end_node {
-        if container.node_type() == Node::TEXT_NODE {
-            return vec![container.unchecked_into()];
-        } else {
-            return return_all_text_nodes(&container);
-        }
-    }
-
-    fn find_inner(
-        container: Node,
-        start_node: &Node,
-        end_node: &Node,
-        has_passed_go: &mut bool,
-        nodes: &mut Vec<Text>,
-    ) -> bool {
-        let mut inside = Some(container);
-
-        while let Some(container) = inside {
-            if &container == start_node {
-                *has_passed_go = true;
-            }
-
-            if *has_passed_go && container.node_type() == Node::TEXT_NODE {
-                log::info!("- {:?}", container.text_content());
-                // TODO: Remove clone
-                nodes.push(container.clone().unchecked_into());
-            }
-
-            if &container == end_node {
-                log::info!("end");
-                return true;
-            }
-
-            if let Some(child) = container.first_child() {
-                if find_inner(child, start_node, end_node, has_passed_go, nodes) {
-                    return true;
-                }
-            }
-
-            inside = container.next_sibling();
-        }
-
-        false
-    }
-
-    let mut nodes = Vec::new();
-
-    find_inner(container, start_node, end_node, &mut false, &mut nodes);
-
-    nodes
-}
-
-fn return_all_text_nodes(container: &Node) -> Vec<Text> {
-    let mut found = Vec::new();
-
-    let mut inside = container.first_child();
-
-    while let Some(container) = inside {
-        if container.node_type() == Node::TEXT_NODE {
-            found.push(container.clone().unchecked_into());
-        }
-
-        found.append(&mut return_all_text_nodes(&container));
-
-        inside = container.next_sibling();
-    }
-
-    found
 }

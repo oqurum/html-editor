@@ -2,7 +2,7 @@ use gloo_utils::document;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlElement, Node, Text};
 
-use crate::{ComponentFlag, Result};
+use crate::{ComponentFlag, Result, selection::SplitText};
 
 /// Nodes which have display wrappers for the text(?) components
 #[derive(Clone)]
@@ -10,16 +10,20 @@ pub struct ComponentNode {
     /// Span container around the text node.
     container: HtmlElement,
 
+
     pub node: Text,
+
+    pub offset: u32,
 
     flag: ComponentFlag,
 }
 
 impl ComponentNode {
-    pub fn wrap(value: Text, flag: ComponentFlag) -> Result<Self> {
+    pub fn wrap(text: Text, offset: u32, flag: ComponentFlag) -> Result<Self> {
         Ok(Self {
-            container: create_container(&value, flag)?,
-            node: value,
+            container: create_container(&text, flag)?,
+            node: text,
+            offset,
             flag,
         })
     }
@@ -33,6 +37,7 @@ impl ComponentNode {
             container: create_container(&text_split, self.flag)?,
             node: text_split,
             flag: self.flag,
+            offset: self.offset + index,
         })
     }
 
@@ -164,4 +169,81 @@ pub(crate) fn try_join_component_into_surroundings(
     nodes.push(value);
 
     Ok(())
+}
+
+/// Return all text `Node`s which are between the start_node and the end_node parameters.
+pub(crate) fn get_all_text_nodes_in_container(
+    container: Node,
+    start_node: &Node,
+    end_node: &Node,
+) -> Vec<SplitText> {
+    if start_node == end_node {
+        if container.node_type() == Node::TEXT_NODE {
+            return vec![SplitText { text: container.unchecked_into(), offset: 0 }];
+        } else {
+            return return_all_text_nodes(&container);
+        }
+    }
+
+    fn find_inner(
+        container: Node,
+        start_node: &Node,
+        end_node: &Node,
+        has_passed_go: &mut bool,
+        nodes: &mut Vec<SplitText>,
+    ) -> bool {
+        let mut inside = Some(container);
+
+        while let Some(container) = inside {
+            if &container == start_node {
+                *has_passed_go = true;
+            }
+
+            if *has_passed_go && container.node_type() == Node::TEXT_NODE {
+                log::info!("- {:?}", container.text_content());
+                // TODO: Remove clone
+                nodes.push(SplitText { text: container.clone().unchecked_into(), offset: 0 });
+            }
+
+            if &container == end_node {
+                log::info!("end");
+                return true;
+            }
+
+            if let Some(child) = container.first_child() {
+                if find_inner(child, start_node, end_node, has_passed_go, nodes) {
+                    return true;
+                }
+            }
+
+            inside = container.next_sibling();
+        }
+
+        false
+    }
+
+    let mut nodes = Vec::new();
+
+    find_inner(container, start_node, end_node, &mut false, &mut nodes);
+
+    nodes
+}
+
+/// Returns all text nodes in the `Node`.
+pub(crate) fn return_all_text_nodes(container: &Node) -> Vec<SplitText> {
+    let mut found = Vec::new();
+
+    let mut inside = container.first_child();
+
+    while let Some(container) = inside {
+        if container.node_type() == Node::TEXT_NODE {
+            found.push(SplitText { text: container.clone().unchecked_into(), offset: 0 });
+        }
+
+        found.append(&mut return_all_text_nodes(&container));
+
+        inside = container.next_sibling();
+    }
+
+    found
 }
