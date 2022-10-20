@@ -1,6 +1,7 @@
 use std::mem;
 
 use gloo_utils::window;
+use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{Range, Selection, Text};
 
 use crate::{ComponentFlag, Result, SharedListenerData, node::get_all_text_nodes_in_container};
@@ -8,7 +9,7 @@ use crate::{ComponentFlag, Result, SharedListenerData, node::get_all_text_nodes_
 pub struct NodeContainer<'a> {
     data: &'a SharedListenerData,
 
-    nodes: Vec<SplitText>,
+    nodes: Vec<Text>,
 
     start_offset: u32,
     end_offset: u32,
@@ -18,15 +19,17 @@ impl<'a> NodeContainer<'a> {
     pub fn does_selected_contain_any(&self, flag: ComponentFlag) -> bool {
         let page_data = self.data.borrow();
 
-        self.nodes.iter().any(|split| {
+        self.nodes.iter().any(|text| {
             page_data
-                .get_component_node(&split.text)
+                .get_text_container(text)
                 .filter(|v| v.has_flag(flag))
                 .is_some()
         })
     }
 
     pub fn toggle_selection(mut self, flag: ComponentFlag) -> Result<()> {
+        // TODO: Store start of Selection Range to use in the reload_section.
+
         self.split_and_acq_text_nodes()?;
 
         if self.does_selected_contain_any(flag) {
@@ -34,22 +37,16 @@ impl<'a> NodeContainer<'a> {
 
             let mut page_data = self.data.borrow_mut();
 
-            let mut nodes = Vec::new();
-
-            for split in self.nodes.drain(..) {
-                if let Some(split) = page_data.remove_component_node_flag(&split.text, flag)? {
-                    nodes.push(split);
-                }
+            for text in &self.nodes {
+                page_data.remove_component_node_flag(text, flag)?;
             }
-
-            self.nodes = nodes;
         } else {
             log::debug!("set component");
 
             let mut page_data = self.data.borrow_mut();
 
-            for split in self.nodes.clone() {
-                page_data.insert_or_update_component(split, flag)?;
+            for text in &self.nodes {
+                page_data.update_container(text, flag)?;
             }
         }
 
@@ -69,14 +66,14 @@ impl<'a> NodeContainer<'a> {
             std::cmp::Ordering::Equal => {
                 log::debug!("Range::select_node");
 
-                range.select_node_contents(&self.nodes[0].text)?;
+                range.select_node_contents(&self.nodes[0])?;
             }
 
             std::cmp::Ordering::Greater => {
                 log::debug!("Range::set_start");
 
-                let start = &self.nodes[0].text;
-                let end = &self.nodes[self.nodes.len() - 1].text;
+                let start = &self.nodes[0];
+                let end = &self.nodes[self.nodes.len() - 1];
 
                 range.set_start(start, 0)?;
                 range.set_end(end, end.length())?;
@@ -117,7 +114,7 @@ impl<'a> NodeContainer<'a> {
 
     fn separate_text_node(
         &mut self,
-        split: SplitText,
+        text: Text,
         start_offset: Option<u32>,
         end_offset: Option<u32>,
     ) -> Result<()> {
@@ -125,71 +122,30 @@ impl<'a> NodeContainer<'a> {
 
         let mut page_data = self.data.borrow_mut();
 
-        // TODO: Remove cloned. Quick mutable & immutable borrow error fix
         // If component node already exists.
-        if let Some(comp_node) = page_data.get_component_node(&split.text).cloned() {
-            log::debug!("Node cached");
+        let comp_node = page_data.get_text_container_mut(&text).unwrap_throw();
 
-            if let Some(end_offset) = end_offset {
-                if end_offset != split.length() {
-                    log::debug!(" - splitting end: {} != {}", end_offset, split.length());
+        log::debug!("Node cached");
 
-                    let next_node = comp_node.split(end_offset)?;
-                    page_data.nodes.push(next_node);
-                }
-            }
+        if let Some(end_offset) = end_offset {
+            if end_offset != text.length() {
+                log::debug!(" - splitting end: {} != {}", end_offset, text.length());
 
-            if let Some(start_offset) = start_offset.filter(|v| *v != 0) {
-                log::debug!(" - splitting start: {}", start_offset);
-
-                let right_text = comp_node.split(start_offset)?;
-
-                self.nodes.push(SplitText { text: right_text.node.clone(), offset: right_text.offset });
-                page_data.nodes.push(right_text);
-            } else {
-                self.nodes.push(split);
-            }
-        } else {
-            if let Some(end_offset) = end_offset {
-                // If we didn't select the full Text Node.
-                if end_offset != split.length() {
-                    // We don't need the Text after the split
-                    let _ = split.split(end_offset)?;
-                }
-            }
-
-            if let Some(start_offset) = start_offset.filter(|v| *v != 0) {
-                self.nodes.push(split.split(start_offset)?);
-
-                // TODO: prefix Node Text
-            } else {
-                self.nodes.push(split);
+                comp_node.split_node(&text, end_offset)?;
             }
         }
 
+        if let Some(start_offset) = start_offset.filter(|v| *v != 0) {
+            log::debug!(" - splitting start: {}", start_offset);
+
+            let right_text = comp_node.split_node(&text, start_offset)?;
+
+            self.nodes.push(right_text);
+        } else {
+            self.nodes.push(text);
+        }
+
         Ok(())
-    }
-}
-
-
-#[derive(Clone)]
-pub struct SplitText {
-    pub text: Text,
-    pub offset: u32,
-}
-
-impl SplitText {
-    pub fn length(&self) -> u32 {
-        self.text.length()
-    }
-
-    pub fn split(&self, index: u32) -> Result<Self> {
-        let text_split = self.text.split_text(index)?;
-
-        Ok(Self {
-            text: text_split,
-            offset: self.offset + index,
-        })
     }
 }
 

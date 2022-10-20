@@ -11,9 +11,9 @@ use web_sys::{HtmlElement, MouseEvent, Text};
 
 use crate::{
     helper::{parents_contains_class, TargetCast},
-    node::{join_node_into_surroundings, try_join_component_into_surroundings},
+    node::TextContainer,
     toolbar::Toolbar,
-    ComponentFlag, ComponentNode, Result, selection::SplitText,
+    ComponentFlag, Result,
 };
 
 type SharedListenerType = Rc<RefCell<Listener>>;
@@ -39,30 +39,33 @@ impl SharedListener {
 
 #[derive(Default)]
 pub struct ListenerData {
-    /// Registered Component Nodes
-    pub nodes: Vec<ComponentNode>,
+    /// The Text Nodes inside the listener Element. Along with flags for the Text.
+    nodes: Vec<TextContainer>,
 }
 
 impl ListenerData {
-    pub fn get_component_node(&self, node: &Text) -> Option<&ComponentNode> {
-        self.nodes.iter().find(|v| &v.node == node)
+    pub fn new(nodes: Vec<Text>) -> Result<Self> {
+        Ok(Self {
+            nodes: nodes.into_iter()
+                .map(TextContainer::new)
+                .collect::<Result<_>>()?
+        })
     }
 
-    pub fn get_component_node_mut(&mut self, node: &Text) -> Option<&mut ComponentNode> {
-        self.nodes.iter_mut().find(|v| &v.node == node)
+    // TODO: Optimize. We're iterating through two arrays.
+    pub fn get_text_container(&self, node: &Text) -> Option<&TextContainer> {
+        self.nodes.iter().find(|v| v.contains_node(node))
     }
 
-    pub fn insert_or_update_component(&mut self, split: SplitText, flag: ComponentFlag) -> Result<()> {
-        if let Some(index) = self.nodes.iter().position(|v| v.node == split.text) {
-            let mut comp = self.nodes.remove(index);
-            comp.add_flag(flag);
+    pub fn get_text_container_mut(&mut self, node: &Text) -> Option<&mut TextContainer> {
+        self.nodes.iter_mut().find(|v| v.contains_node(node))
+    }
 
-            try_join_component_into_surroundings(comp, &mut self.nodes)?;
+    pub fn update_container(&mut self, text: &Text, flag: ComponentFlag) -> Result<()> {
+        if let Some(comp) = self.get_text_container_mut(text) {
+            comp.add_flag_to(text, flag)?;
         } else {
-            try_join_component_into_surroundings(
-                ComponentNode::wrap(split.text, split.offset, flag)?,
-                &mut self.nodes,
-            )?;
+            panic!("unable to find Text Container");
         }
 
         Ok(())
@@ -72,33 +75,12 @@ impl ListenerData {
         &mut self,
         node: &Text,
         flag: ComponentFlag,
-    ) -> Result<Option<SplitText>> {
-        if let Some(index) = self.nodes.iter().position(|v| &v.node == node) {
-            let mut comp = self.nodes.swap_remove(index);
-
-            comp.remove_flag(flag);
-
-            if comp.are_flags_empty() {
-                let offset = comp.offset;
-                let text = Self::handle_component_unwrap(comp)?;
-
-                return Ok(Some(SplitText { text, offset, }));
-            } else {
-                try_join_component_into_surroundings(comp, &mut self.nodes)?;
-            }
+    ) -> Result<()> {
+        if let Some(comp) = self.get_text_container_mut(node) {
+            comp.remove_flag_from(node, flag)?;
         }
 
-        Ok(None)
-    }
-
-    /// Unwrap the component and join Text Node into surrounding nodes of same type.
-    fn handle_component_unwrap(value: ComponentNode) -> Result<Text> {
-        let node = value.unwrap()?;
-
-        // Check the Nodes' surroundings for Nodes of the same type.
-        let node = join_node_into_surroundings(node)?;
-
-        Ok(node)
+        Ok(())
     }
 }
 
@@ -113,6 +95,7 @@ pub struct Listener {
     toolbar: Toolbar,
 }
 
+/// Should be called AFTER page has fully loaded and finished any Element changes.
 pub fn register(element: HtmlElement) -> Result<()> {
     LISTENERS.with(|listeners| -> Result<()> {
         let mut listeners = listeners.borrow_mut();
@@ -125,7 +108,9 @@ pub fn register(element: HtmlElement) -> Result<()> {
         let index = INCREMENT.fetch_add(1, Ordering::Relaxed);
         let listener_class = create_listener_class(index);
 
-        let listener_data = Rc::new(RefCell::new(ListenerData::default()));
+        let nodes = crate::node::return_all_text_nodes(&element);
+
+        let listener_data = Rc::new(RefCell::new(ListenerData::new(nodes)?));
         let toolbar = Toolbar::new(&listener_data)?;
 
         // Add class to container element
