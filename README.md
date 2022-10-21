@@ -1,10 +1,9 @@
 # html-editor
 A Book Visual Editor for editing text Eg. Highlight, Underline, Draw, etc.
 
+When registering the listener it will cache the Text Nodes inside the HTML Element. Which means this library only works with a static webpage after registered.
 
 ## Todo:
- - Highlight
- - Underscore
  - Drawing
  - Notes
  - Referencing

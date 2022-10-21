@@ -4,7 +4,7 @@ use gloo_utils::window;
 use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{Range, Selection, Text};
 
-use crate::{ComponentFlag, Result, SharedListenerData, node::get_all_text_nodes_in_container};
+use crate::{node::get_all_text_nodes_in_container, ComponentFlag, Result, SharedListenerData};
 
 pub struct NodeContainer<'a> {
     data: &'a SharedListenerData,
@@ -148,7 +148,6 @@ impl<'a> NodeContainer<'a> {
         Ok(())
     }
 }
-
 
 pub fn get_nodes_in_selection(
     selection: Selection,

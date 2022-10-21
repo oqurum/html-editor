@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use gloo_utils::document;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent};
@@ -5,25 +7,32 @@ use web_sys::{HtmlElement, MouseEvent};
 use crate::{
     component::{Component, Highlight, Underline},
     listener::SharedListenerData,
-    selection, Result,
+    selection, ListenerId, Result,
 };
 
 pub struct Toolbar {
     pub popup: HtmlElement,
     mouse_down_listener: Option<Closure<dyn Fn(MouseEvent)>>,
 
+    listener_id: ListenerId,
+
     buttons: Vec<Button>,
 }
 
 impl Toolbar {
-    pub fn new(data: &SharedListenerData) -> Result<Self> {
+    pub fn new(
+        listener_id: ListenerId,
+        data: &SharedListenerData,
+        func: &Rc<RefCell<fn(ListenerId)>>,
+    ) -> Result<Self> {
         let mut this = Self {
             popup: document().create_element("div")?.unchecked_into(),
             buttons: Vec::new(),
             mouse_down_listener: None,
+            listener_id,
         };
 
-        this.create_popup(data)?;
+        this.create_popup(data, func)?;
 
         Ok(this)
     }
@@ -55,7 +64,11 @@ impl Toolbar {
         self.popup.remove();
     }
 
-    fn create_popup(&mut self, data: &SharedListenerData) -> Result<()> {
+    fn create_popup(
+        &mut self,
+        data: &SharedListenerData,
+        func: &Rc<RefCell<fn(ListenerId)>>,
+    ) -> Result<()> {
         let element = &self.popup;
         element.set_class_name("toolbar");
 
@@ -78,8 +91,8 @@ impl Toolbar {
 
         self.mouse_down_listener = Some(ignore_mouse_down);
 
-        self.create_button(Highlight, data.clone())?;
-        self.create_button(Underline, data.clone())?;
+        self.create_button(Highlight, data.clone(), func.clone())?;
+        self.create_button(Underline, data.clone(), func.clone())?;
 
         Ok(())
     }
@@ -88,7 +101,10 @@ impl Toolbar {
         &mut self,
         component: C,
         data: SharedListenerData,
+        func: Rc<RefCell<fn(ListenerId)>>,
     ) -> Result<()> {
+        let listener_id = self.listener_id;
+
         let element: HtmlElement = document().create_element("div")?.unchecked_into();
 
         element.set_inner_text(C::TITLE);
@@ -103,6 +119,8 @@ impl Toolbar {
                 let nodes = selection::get_nodes_in_selection(selection, &data).unwrap_throw();
 
                 component.on_select(nodes).unwrap_throw();
+
+                (func.borrow_mut())(listener_id);
             }
         }) as Box<dyn Fn()>);
 

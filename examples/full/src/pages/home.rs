@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use wasm_bindgen::UnwrapThrowExt;
 use web_sys::HtmlElement;
 use yew::{function_component, functional::use_node_ref, html};
@@ -9,7 +11,13 @@ pub fn home() -> Html {
     {
         let node = node.clone();
         yew_hooks::use_mount(move || {
-            editor::register(node.cast::<HtmlElement>().unwrap_throw()).unwrap_throw();
+            editor::register(
+                node.cast::<HtmlElement>().unwrap_throw(),
+                Rc::new(RefCell::new(|id| {
+                    log::debug!("{:#?}", id.try_save());
+                })),
+            )
+            .unwrap_throw();
         });
     }
 

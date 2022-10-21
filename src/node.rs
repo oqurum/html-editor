@@ -4,12 +4,10 @@ use web_sys::{HtmlElement, Node, Text};
 
 use crate::{ComponentFlag, Result};
 
-
-
 #[derive(Clone)]
 pub struct TextContainer {
     /// The non-split Text `Node` or split `Node`s
-    text: Vec<ComponentNode>,
+    pub(crate) text: Vec<ComponentNode>,
 }
 
 impl TextContainer {
@@ -33,6 +31,10 @@ impl TextContainer {
         self.text.iter().any(|v| v.has_flag(flag))
     }
 
+    pub fn are_all_flags_empty(&self) -> bool {
+        self.text.iter().all(|v| v.are_flags_empty())
+    }
+
     pub fn contains_node(&self, node: &Text) -> bool {
         self.text.iter().any(|v| &v.node == node)
     }
@@ -42,7 +44,12 @@ impl TextContainer {
     }
 
     pub fn add_flag_to(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
-        if let Some((index, comp)) = self.text.iter_mut().enumerate().find(|(_, v)| &v.node == node) {
+        if let Some((index, comp)) = self
+            .text
+            .iter_mut()
+            .enumerate()
+            .find(|(_, v)| &v.node == node)
+        {
             comp.add_flag(flag)?;
 
             try_join_component_into_surroundings(index, &mut self.text)?;
@@ -51,8 +58,28 @@ impl TextContainer {
         Ok(())
     }
 
+    pub fn set_flag_for(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
+        if let Some((index, comp)) = self
+            .text
+            .iter_mut()
+            .enumerate()
+            .find(|(_, v)| &v.node == node)
+        {
+            comp.set_flag(flag)?;
+
+            try_join_component_into_surroundings(index, &mut self.text)?;
+        }
+
+        Ok(())
+    }
+
     pub fn remove_flag_from(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
-        if let Some((index, comp)) = self.text.iter_mut().enumerate().find(|(_, v)| &v.node == node) {
+        if let Some((index, comp)) = self
+            .text
+            .iter_mut()
+            .enumerate()
+            .find(|(_, v)| &v.node == node)
+        {
             comp.remove_flag(flag)?;
 
             try_join_component_into_surroundings(index, &mut self.text)?;
@@ -78,19 +105,18 @@ impl TextContainer {
     }
 }
 
-
 /// Nodes which have display wrappers for the text(?) components
 #[derive(Clone)]
 pub struct ComponentNode {
     /// Span container around the text node.
     container: HtmlElement,
 
-
+    // TODO: Private
     pub node: Text,
 
     pub offset: u32,
 
-    flag: ComponentFlag,
+    pub flag: ComponentFlag,
 }
 
 impl ComponentNode {
@@ -151,7 +177,7 @@ impl ComponentNode {
         self.update_container()
     }
 
-    pub fn add_flag(&mut self, value: ComponentFlag)  -> Result<()>{
+    pub fn add_flag(&mut self, value: ComponentFlag) -> Result<()> {
         self.flag.insert(value);
         self.update_container()
     }

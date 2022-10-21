@@ -4,6 +4,7 @@ mod highlight;
 mod underline;
 
 pub use highlight::*;
+use serde::{Deserialize, Serialize};
 pub use underline::*;
 
 use crate::{selection::NodeContainer, Result};
@@ -22,10 +23,11 @@ pub trait Component {
 }
 
 bitflags! {
+    #[derive(Serialize, Deserialize)]
     pub struct ComponentFlag: u32 {
-        const ANCHOR = 0b00000001;
-        const HIGHLIGHT = 0b00000010;
-        const UNDERLINE = 0b00000100;
+        const ANCHOR = 0b0000_0001;
+        const HIGHLIGHT = 0b0000_0010;
+        const UNDERLINE = 0b0000_0100;
     }
 }
 

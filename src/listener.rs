@@ -1,5 +1,5 @@
 use std::{
-    cell::{RefCell, RefMut},
+    cell::RefCell,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -13,10 +13,10 @@ use crate::{
     helper::{parents_contains_class, TargetCast},
     node::TextContainer,
     toolbar::Toolbar,
-    ComponentFlag, Result,
+    ComponentFlag, Result, store,
 };
 
-type SharedListenerType = Rc<RefCell<Listener>>;
+pub type SharedListenerType = Rc<RefCell<Listener>>;
 pub type SharedListenerData = Rc<RefCell<ListenerData>>;
 // TODO: Fix. I don't like all these Rc's
 
@@ -25,30 +25,62 @@ lazy_static! {
 }
 
 thread_local! {
-    static LISTENERS: RefCell<Vec<SharedListener>> = RefCell::new(Vec::new());
+    static LISTENERS: RefCell<Vec<SharedListenerType>> = RefCell::new(Vec::new());
 }
 
-#[derive(Clone)]
-struct SharedListener(SharedListenerType);
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ListenerId(usize);
 
-impl SharedListener {
-    pub fn write(&self) -> RefMut<Listener> {
-        self.0.borrow_mut()
+impl ListenerId {
+    pub fn try_get(&self) -> Option<SharedListenerType> {
+        LISTENERS.with(|listeners| {
+            let listeners = listeners.borrow();
+
+            for item in &*listeners {
+                if &item.borrow().listener_id == self {
+                    return Some(item.clone());
+                }
+            }
+
+            None
+        })
+    }
+
+    /// Returns None if Listener was not found OR if SaveState is empty.
+    pub fn try_save(&self) -> Option<store::SaveState> {
+        let listener = self.try_get()?;
+
+        let borrow = listener.borrow();
+
+        let borrow2 = borrow.data.borrow();
+
+        let save = store::save(&*borrow2);
+
+        Some(save).filter(|v| !v.nodes.is_empty())
+    }
+}
+
+impl std::ops::Deref for ListenerId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 #[derive(Default)]
 pub struct ListenerData {
     /// The Text Nodes inside the listener Element. Along with flags for the Text.
-    nodes: Vec<TextContainer>,
+    pub(crate) nodes: Vec<TextContainer>,
 }
 
 impl ListenerData {
     pub fn new(nodes: Vec<Text>) -> Result<Self> {
         Ok(Self {
-            nodes: nodes.into_iter()
+            nodes: nodes
+                .into_iter()
                 .map(TextContainer::new)
-                .collect::<Result<_>>()?
+                .collect::<Result<_>>()?,
         })
     }
 
@@ -71,11 +103,7 @@ impl ListenerData {
         Ok(())
     }
 
-    pub fn remove_component_node_flag(
-        &mut self,
-        node: &Text,
-        flag: ComponentFlag,
-    ) -> Result<()> {
+    pub fn remove_component_node_flag(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
         if let Some(comp) = self.get_text_container_mut(node) {
             comp.remove_flag_from(node, flag)?;
         }
@@ -85,7 +113,9 @@ impl ListenerData {
 }
 
 pub struct Listener {
-    pub index: usize,
+    pub listener_id: ListenerId,
+
+    pub on_event: Rc<RefCell<fn(ListenerId)>>,
 
     pub element: HtmlElement,
     pub function: Option<Closure<dyn Fn(MouseEvent)>>,
@@ -95,36 +125,39 @@ pub struct Listener {
     toolbar: Toolbar,
 }
 
-/// Should be called AFTER page has fully loaded and finished any Element changes.
-pub fn register(element: HtmlElement) -> Result<()> {
+pub fn register_with_data(
+    element: HtmlElement,
+    data: ListenerData,
+    on_event: Rc<RefCell<fn(ListenerId)>>,
+) -> Result<()> {
     LISTENERS.with(|listeners| -> Result<()> {
         let mut listeners = listeners.borrow_mut();
 
         // TODO: Check that we also aren't inside another listener.
-        if listeners.iter().any(|l| l.write().element == element) {
+        if listeners.iter().any(|l| l.borrow().element == element) {
             panic!("Already Listening on Element!");
         }
 
-        let index = INCREMENT.fetch_add(1, Ordering::Relaxed);
-        let listener_class = create_listener_class(index);
+        let index = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
+        let listener_class = create_listener_class(*index);
 
-        let nodes = crate::node::return_all_text_nodes(&element);
-
-        let listener_data = Rc::new(RefCell::new(ListenerData::new(nodes)?));
-        let toolbar = Toolbar::new(&listener_data)?;
+        let listener_data = Rc::new(RefCell::new(data));
+        let toolbar = Toolbar::new(index, &listener_data, &on_event)?;
 
         // Add class to container element
         element.class_list().add_1(&listener_class)?;
 
-        let listener_rc = SharedListener(Rc::new(RefCell::new(Listener {
-            index,
+        let listener_rc = Rc::new(RefCell::new(Listener {
+            listener_id: index,
+
+            on_event,
 
             element,
             function: None,
             toolbar,
 
             data: listener_data,
-        })));
+        }));
 
         // Create the initial listener
         let listener = listener_rc.clone();
@@ -135,7 +168,59 @@ pub fn register(element: HtmlElement) -> Result<()> {
         document()
             .add_event_listener_with_callback("mouseup", function.as_ref().unchecked_ref())?;
 
-        listener_rc.write().function = Some(function);
+        listener_rc.borrow_mut().function = Some(function);
+
+        listeners.push(listener_rc);
+
+        Ok(())
+    })?;
+
+    Ok(())
+}
+
+/// Should be called AFTER page has fully loaded and finished any Element changes.
+pub fn register(element: HtmlElement, on_event: Rc<RefCell<fn(ListenerId)>>) -> Result<()> {
+    LISTENERS.with(|listeners| -> Result<()> {
+        let mut listeners = listeners.borrow_mut();
+
+        // TODO: Check that we also aren't inside another listener.
+        if listeners.iter().any(|l| l.borrow().element == element) {
+            panic!("Already Listening on Element!");
+        }
+
+        let listener_id = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
+        let listener_class = create_listener_class(*listener_id);
+
+        let nodes = crate::node::return_all_text_nodes(&element);
+
+        let listener_data = Rc::new(RefCell::new(ListenerData::new(nodes)?));
+        let toolbar = Toolbar::new(listener_id, &listener_data, &on_event)?;
+
+        // Add class to container element
+        element.class_list().add_1(&listener_class)?;
+
+        let listener_rc = Rc::new(RefCell::new(Listener {
+            listener_id,
+
+            on_event,
+
+            element,
+            function: None,
+            toolbar,
+
+            data: listener_data,
+        }));
+
+        // Create the initial listener
+        let listener = listener_rc.clone();
+        let function = Closure::wrap(Box::new(move |event: MouseEvent| {
+            handle_listener_mouseup(event, &listener_class, &listener).unwrap_throw();
+        }) as Box<dyn Fn(MouseEvent)>);
+
+        document()
+            .add_event_listener_with_callback("mouseup", function.as_ref().unchecked_ref())?;
+
+        listener_rc.borrow_mut().function = Some(function);
 
         listeners.push(listener_rc);
 
@@ -148,7 +233,7 @@ pub fn register(element: HtmlElement) -> Result<()> {
 fn handle_listener_mouseup(
     event: MouseEvent,
     listening_class: &str,
-    handler: &SharedListener,
+    handler: &SharedListenerType,
 ) -> Result<()> {
     if !parents_contains_class(event.target_unchecked_into(), listening_class) {
         return Ok(());
@@ -159,9 +244,12 @@ fn handle_listener_mouseup(
 
         let bb = range.get_bounding_client_rect();
 
-        handler.write().toolbar.open(bb.x(), bb.y(), bb.width())?;
+        handler
+            .borrow_mut()
+            .toolbar
+            .open(bb.x(), bb.y(), bb.width())?;
     } else {
-        handler.write().toolbar.close();
+        handler.borrow_mut().toolbar.close();
     }
 
     Ok(())
