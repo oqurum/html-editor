@@ -5,7 +5,7 @@ use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent};
 
 use crate::{
-    component::{Component, Highlight, Underline},
+    component::{Component, Highlight, Italicize, Underline},
     listener::SharedListenerData,
     selection, ListenerId, Result,
 };
@@ -42,7 +42,7 @@ impl Toolbar {
 
         let style = self.popup.style();
 
-        let width = 100.0;
+        let width = 90.0; // TODO: Remove static width
         let height = 30.0;
 
         style.set_property(
@@ -82,17 +82,16 @@ impl Toolbar {
             ignore_mouse_down.as_ref().unchecked_ref(),
         )?;
 
-        // Style Toolbar
         let style = element.style();
-
-        let width = 100.0;
-
-        style.set_property("width", &format!("{width}px"))?;
 
         self.mouse_down_listener = Some(ignore_mouse_down);
 
         self.create_button(Highlight, data.clone(), func.clone())?;
         self.create_button(Underline, data.clone(), func.clone())?;
+        self.create_button(Italicize, data.clone(), func.clone())?;
+
+        // Style Toolbar
+        style.set_property("width", &format!("{}px", self.buttons.len() * 30))?;
 
         Ok(())
     }

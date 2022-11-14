@@ -1,10 +1,12 @@
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 
 mod highlight;
+mod italicize;
 mod underline;
 
 pub use highlight::*;
-use serde::{Deserialize, Serialize};
+pub use italicize::*;
 pub use underline::*;
 
 use crate::{selection::NodeContainer, Result};
@@ -25,7 +27,7 @@ pub trait Component {
 bitflags! {
     #[derive(Serialize, Deserialize)]
     pub struct ComponentFlag: u32 {
-        const ANCHOR = 0b0000_0001;
+        const ITALICIZE = 0b0000_0001;
         const HIGHLIGHT = 0b0000_0010;
         const UNDERLINE = 0b0000_0100;
     }
@@ -35,8 +37,8 @@ impl ComponentFlag {
     pub fn into_class_names(self) -> String {
         let mut classes = Vec::new();
 
-        if self.contains(Self::ANCHOR) {
-            classes.push("anchor");
+        if self.contains(Self::ITALICIZE) {
+            classes.push("italicize");
         }
 
         if self.contains(Self::HIGHLIGHT) {

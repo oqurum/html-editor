@@ -12,8 +12,9 @@ use web_sys::{HtmlElement, MouseEvent, Text};
 use crate::{
     helper::{parents_contains_class, TargetCast},
     node::TextContainer,
+    store,
     toolbar::Toolbar,
-    ComponentFlag, Result, store,
+    ComponentFlag, Result,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
