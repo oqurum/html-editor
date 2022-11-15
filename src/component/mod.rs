@@ -76,15 +76,7 @@ impl ComponentFlag {
                 HighlightTypes::try_from_primitive(value).unwrap().get_css()
             }
 
-            Self::ITALICIZE => {
-                unimplemented!()
-            }
-
-            Self::UNDERLINE => {
-                unimplemented!()
-            }
-
-            _ => unimplemented!()
+            _ => None,
         }
     }
 
