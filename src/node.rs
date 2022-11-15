@@ -2,7 +2,7 @@ use gloo_utils::document;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlElement, Node, Text};
 
-use crate::{ComponentFlag, Result, component::FlagsWithData};
+use crate::{Result, component::FlagsWithData};
 
 #[derive(Clone)]
 pub struct TextContainer {

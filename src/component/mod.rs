@@ -66,6 +66,8 @@ bitflags! {
     }
 }
 
+static COMPONENT_FLAGS: [ComponentFlag; 3] = [ ComponentFlag::ITALICIZE, ComponentFlag::HIGHLIGHT, ComponentFlag::UNDERLINE ];
+
 impl ComponentFlag {
     // TODO: Replace with get_data() but we're using Self: Sized for the trait
     pub fn get_data_class(self, value: u8) -> Option<Cow<'static, str>> {
@@ -190,5 +192,63 @@ impl FlagsWithData {
         }
 
         classes
+    }
+
+    pub fn into_singles_vec(&self) -> Vec<SingleFlagWithData> {
+        COMPONENT_FLAGS.into_iter()
+        .filter_map(|v| {
+            if self.flag.contains(v) {
+                let data = self.data.iter()
+                    .find_map(|(flag, data)| {
+                        if &v == flag {
+                            Some(*data)
+                        } else {
+                            None
+                        }
+                    }).unwrap_or_default();
+
+                Some(SingleFlagWithData::new(v, data))
+            } else {
+                None
+            }
+        })
+        .collect()
+    }
+
+    pub fn from_singles(value: &[SingleFlagWithData]) -> Self {
+        let mut this = Self::empty();
+
+        for item in value {
+            this.flag.insert(item.flag());
+            this.data.push((item.flag(), item.data()));
+        }
+
+        this.data.sort_unstable();
+
+        this
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SingleFlagWithData(u64);
+
+impl SingleFlagWithData {
+    pub fn new(flag: ComponentFlag, data: u8) -> Self {
+        Self((flag.bits() as u64) << 32 | (data as u64))
+    }
+
+    pub fn empty() -> Self {
+        Self(0)
+    }
+
+
+    pub fn flag(self) -> ComponentFlag {
+        ComponentFlag::from_bits_truncate((self.0 >> 32) as u32)
+    }
+
+    pub fn data(self) -> u8 {
+        (self.0 & 0xFF) as u8
     }
 }
