@@ -2,7 +2,7 @@ use gloo_utils::document;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlElement, Node, Text};
 
-use crate::{ComponentFlag, Result};
+use crate::{ComponentFlag, Result, component::FlagsWithData};
 
 #[derive(Clone)]
 pub struct TextContainer {
@@ -13,7 +13,7 @@ pub struct TextContainer {
 impl TextContainer {
     pub fn new(text: Text) -> Result<Self> {
         Ok(Self {
-            text: vec![ComponentNode::wrap(text, 0, ComponentFlag::empty())?],
+            text: vec![ComponentNode::wrap(text, 0, FlagsWithData::empty())?],
         })
     }
 
@@ -27,7 +27,7 @@ impl TextContainer {
         })
     }
 
-    pub fn has_flag(&self, flag: ComponentFlag) -> bool {
+    pub fn has_flag(&self, flag: &FlagsWithData) -> bool {
         self.text.iter().any(|v| v.has_flag(flag))
     }
 
@@ -43,7 +43,7 @@ impl TextContainer {
         self.text.iter_mut().find(|v| &v.node == node)
     }
 
-    pub fn add_flag_to(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
+    pub fn add_flag_to(&mut self, node: &Text, flag: FlagsWithData) -> Result<()> {
         if let Some((index, comp)) = self
             .text
             .iter_mut()
@@ -58,7 +58,7 @@ impl TextContainer {
         Ok(())
     }
 
-    pub fn set_flag_for(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
+    pub fn set_flag_for(&mut self, node: &Text, flag: FlagsWithData) -> Result<()> {
         if let Some((index, comp)) = self
             .text
             .iter_mut()
@@ -73,7 +73,7 @@ impl TextContainer {
         Ok(())
     }
 
-    pub fn remove_flag_from(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
+    pub fn remove_flag_from(&mut self, node: &Text, flag: &FlagsWithData) -> Result<()> {
         if let Some((index, comp)) = self
             .text
             .iter_mut()
@@ -116,13 +116,13 @@ pub struct ComponentNode {
 
     pub offset: u32,
 
-    pub flag: ComponentFlag,
+    pub flag: FlagsWithData,
 }
 
 impl ComponentNode {
-    pub fn wrap(text: Text, offset: u32, flag: ComponentFlag) -> Result<Self> {
+    pub fn wrap(text: Text, offset: u32, flag: FlagsWithData) -> Result<Self> {
         Ok(Self {
-            container: create_container(&text, flag)?,
+            container: create_container(&text, flag.clone())?,
             node: text,
             offset,
             flag,
@@ -135,9 +135,9 @@ impl ComponentNode {
         self.container.after_with_node_1(&text_split)?;
 
         Ok(Self {
-            container: create_container(&text_split, self.flag)?,
+            container: create_container(&text_split, self.flag.clone())?,
             node: text_split,
-            flag: self.flag,
+            flag: self.flag.clone(),
             offset: self.offset + index,
         })
     }
@@ -168,27 +168,27 @@ impl ComponentNode {
         self.flag.is_empty()
     }
 
-    pub fn has_flag(&self, value: ComponentFlag) -> bool {
+    pub fn has_flag(&self, value: &FlagsWithData) -> bool {
         self.flag.contains(value)
     }
 
-    pub fn remove_flag(&mut self, value: ComponentFlag) -> Result<()> {
+    pub fn remove_flag(&mut self, value: &FlagsWithData) -> Result<()> {
         self.flag.remove(value);
         self.update_container()
     }
 
-    pub fn add_flag(&mut self, value: ComponentFlag) -> Result<()> {
+    pub fn add_flag(&mut self, value: FlagsWithData) -> Result<()> {
         self.flag.insert(value);
         self.update_container()
     }
 
-    pub fn set_flag(&mut self, value: ComponentFlag) -> Result<()> {
+    pub fn set_flag(&mut self, value: FlagsWithData) -> Result<()> {
         self.flag = value;
         self.update_container()
     }
 
     fn update_container(&self) -> Result<()> {
-        self.container.set_class_name(&self.flag.into_class_names());
+        self.container.set_class_name(&self.flag.generate_class_name());
 
         if self.flag.is_empty() && self.container.parent_element().is_some() {
             // Unwrap the container.
@@ -203,9 +203,9 @@ impl ComponentNode {
     }
 }
 
-fn create_container(text_node: &Text, flag: ComponentFlag) -> Result<HtmlElement> {
+fn create_container(text_node: &Text, flag: FlagsWithData) -> Result<HtmlElement> {
     let container = document().create_element("span")?;
-    container.set_class_name(&flag.into_class_names());
+    container.set_class_name(&flag.generate_class_name());
 
     if !flag.is_empty() {
         text_node.before_with_node_1(&container)?;

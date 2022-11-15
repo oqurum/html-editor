@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 use web_sys::{HtmlElement, Text};
 
-use crate::{listener::ListenerData, ComponentFlag, ComponentNode, ListenerId, Result};
+use crate::{listener::ListenerData, ComponentFlag, ComponentNode, ListenerId, Result, component::FlagsWithData};
 
 pub fn load_and_register(
     container: HtmlElement,
@@ -52,17 +52,17 @@ impl SaveState {
 
             for text_split in saved_node.flags.iter() {
                 if text_split.offset == 0 {
-                    list_node.set_flag_for(&curr_node, text_split.flag)?;
+                    list_node.set_flag_for(&curr_node, text_split.flag.clone())?;
                 } else {
                     let node = list_node.split_node(&curr_node, text_split.offset - text_offset)?;
-                    list_node.set_flag_for(&node, text_split.flag)?;
+                    list_node.set_flag_for(&node, text_split.flag.clone())?;
                     curr_node = node;
                 }
 
                 text_offset += text_split.offset;
             }
 
-            list_node.add_flag_to(&curr_node, saved_node.flags[0].flag)?;
+            list_node.add_flag_to(&curr_node, saved_node.flags[0].flag.clone())?;
         }
 
         Ok(listener)
@@ -85,7 +85,7 @@ impl SavedNode {
                 .iter()
                 .map(|v| SavedNodeFlag {
                     offset: v.offset,
-                    flag: v.flag,
+                    flag: v.flag.clone(),
                 })
                 .collect(),
         }
@@ -95,5 +95,29 @@ impl SavedNode {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SavedNodeFlag {
     offset: u32,
-    flag: ComponentFlag,
+    // TODO: Should I change to vec with SingleFlagWithData?
+    flag: FlagsWithData,
 }
+
+
+// #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+// pub struct SingleFlagWithData(u64);
+
+// impl SingleFlagWithData {
+//     pub fn new(flag: ComponentFlag, data: u8) -> Self {
+//         Self((flag.bits() as u64) << 32 | (data as u64))
+//     }
+
+//     pub fn empty() -> Self {
+//         Self(0)
+//     }
+
+
+//     pub fn flag(self) -> ComponentFlag {
+//         ComponentFlag::from_bits_truncate((self.0 >> 32) as u32)
+//     }
+
+//     pub fn data(self) -> u8 {
+//         (self.0 & 0xFF) as u8
+//     }
+// }

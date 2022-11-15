@@ -8,10 +8,12 @@ impl Component for Underline {
     const FLAG: ComponentFlag = ComponentFlag::UNDERLINE;
     const TITLE: &'static str = "U";
 
+    type Data = ();
+
     fn on_select(&self, nodes: NodeContainer) -> Result<()> {
         log::debug!("Underline");
 
-        nodes.toggle_selection(Self::FLAG)?;
+        nodes.toggle_selection::<Self>()?;
 
         Ok(())
     }

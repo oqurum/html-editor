@@ -14,7 +14,7 @@ use crate::{
     node::TextContainer,
     store,
     toolbar::Toolbar,
-    ComponentFlag, Result,
+    ComponentFlag, Result, component::FlagsWithData,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
@@ -55,7 +55,7 @@ impl ListenerId {
 
         let borrow2 = borrow.data.borrow();
 
-        let save = store::save(&*borrow2);
+        let save = store::save(&borrow2);
 
         Some(save).filter(|v| !v.nodes.is_empty())
     }
@@ -94,7 +94,7 @@ impl ListenerData {
         self.nodes.iter_mut().find(|v| v.contains_node(node))
     }
 
-    pub fn update_container(&mut self, text: &Text, flag: ComponentFlag) -> Result<()> {
+    pub fn update_container(&mut self, text: &Text, flag: FlagsWithData) -> Result<()> {
         if let Some(comp) = self.get_text_container_mut(text) {
             comp.add_flag_to(text, flag)?;
         } else {
@@ -104,7 +104,7 @@ impl ListenerData {
         Ok(())
     }
 
-    pub fn remove_component_node_flag(&mut self, node: &Text, flag: ComponentFlag) -> Result<()> {
+    pub fn remove_component_node_flag(&mut self, node: &Text, flag: &FlagsWithData) -> Result<()> {
         if let Some(comp) = self.get_text_container_mut(node) {
             comp.remove_flag_from(node, flag)?;
         }

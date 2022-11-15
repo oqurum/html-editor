@@ -4,7 +4,7 @@ use gloo_utils::window;
 use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{Range, Selection, Text};
 
-use crate::{node::get_all_text_nodes_in_container, ComponentFlag, Result, SharedListenerData};
+use crate::{node::get_all_text_nodes_in_container, Result, SharedListenerData, Component, component::FlagsWithData};
 
 pub struct NodeContainer<'a> {
     data: &'a SharedListenerData,
@@ -16,7 +16,7 @@ pub struct NodeContainer<'a> {
 }
 
 impl<'a> NodeContainer<'a> {
-    pub fn does_selected_contain_any(&self, flag: ComponentFlag) -> bool {
+    pub fn does_selected_contain_any(&self, flag: &FlagsWithData) -> bool {
         let page_data = self.data.borrow();
 
         self.nodes.iter().any(|text| {
@@ -27,18 +27,20 @@ impl<'a> NodeContainer<'a> {
         })
     }
 
-    pub fn toggle_selection(mut self, flag: ComponentFlag) -> Result<()> {
+    pub fn toggle_selection<D: Component>(mut self) -> Result<()> {
+        let flag = FlagsWithData::new_with_data(D::FLAG, D::get_default_data_id());
+
         // TODO: Store start of Selection Range to use in the reload_section.
 
         self.split_and_acq_text_nodes()?;
 
-        if self.does_selected_contain_any(flag) {
+        if self.does_selected_contain_any(&flag) {
             log::debug!("unset component");
 
             let mut page_data = self.data.borrow_mut();
 
             for text in &self.nodes {
-                page_data.remove_component_node_flag(text, flag)?;
+                page_data.remove_component_node_flag(text, &flag)?;
             }
         } else {
             log::debug!("set component");
@@ -46,7 +48,7 @@ impl<'a> NodeContainer<'a> {
             let mut page_data = self.data.borrow_mut();
 
             for text in &self.nodes {
-                page_data.update_container(text, flag)?;
+                page_data.update_container(text, flag.clone())?;
             }
         }
 
