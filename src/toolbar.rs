@@ -1,11 +1,11 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::{RefCell, Cell}, rc::Rc};
 
 use gloo_utils::document;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent};
 
 use crate::{
-    component::{Component, Highlight, Italicize, Underline},
+    component::{Component, Highlight, Italicize, Underline, Context},
     listener::SharedListenerData,
     selection, ListenerId, Result,
 };
@@ -115,15 +115,18 @@ impl Toolbar {
                 .unwrap_throw()
                 .filter(|v| !v.is_collapsed())
             {
-                let nodes = selection::get_nodes_in_selection(selection, &data).unwrap_throw();
+                let context = Context {
+                    nodes: Rc::new(RefCell::new(selection::get_nodes_in_selection(selection, data.clone()).unwrap_throw()))
+                };
 
-                component.on_select(nodes).unwrap_throw();
+                component.on_select(&context).unwrap_throw();
 
                 (func.borrow_mut())(listener_id);
             }
         }) as Box<dyn Fn()>);
 
         element.add_event_listener_with_callback("click", function.as_ref().unchecked_ref())?;
+        // TODO: On Hold Event
 
         // Add Button to Toolbar
         self.popup.append_child(&element)?;

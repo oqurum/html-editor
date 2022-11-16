@@ -2,9 +2,9 @@ use std::borrow::Cow;
 
 use num_enum::{TryFromPrimitive, IntoPrimitive};
 
-use crate::{selection::NodeContainer, ComponentFlag, Result};
+use crate::{ComponentFlag, Result};
 
-use super::{Component, ComponentData};
+use super::{Component, ComponentData, Context};
 
 pub struct Highlight;
 
@@ -14,10 +14,10 @@ impl Component for Highlight {
 
     type Data = HighlightTypes;
 
-    fn on_select(&self, nodes: NodeContainer) -> Result<()> {
+    fn on_select(&self, ctx: &Context) -> Result<()> {
         log::debug!("Highlight");
 
-        nodes.toggle_selection::<Self>()?;
+        ctx.nodes.borrow_mut().toggle_selection::<Self>()?;
 
         Ok(())
     }

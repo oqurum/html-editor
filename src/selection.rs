@@ -6,8 +6,8 @@ use web_sys::{Range, Selection, Text};
 
 use crate::{node::get_all_text_nodes_in_container, Result, SharedListenerData, Component, component::FlagsWithData};
 
-pub struct NodeContainer<'a> {
-    data: &'a SharedListenerData,
+pub struct NodeContainer {
+    data: SharedListenerData,
 
     nodes: Vec<Text>,
 
@@ -15,7 +15,7 @@ pub struct NodeContainer<'a> {
     end_offset: u32,
 }
 
-impl<'a> NodeContainer<'a> {
+impl NodeContainer {
     pub fn does_selected_contain_any(&self, flag: &FlagsWithData) -> bool {
         let page_data = self.data.borrow();
 
@@ -27,7 +27,7 @@ impl<'a> NodeContainer<'a> {
         })
     }
 
-    pub fn toggle_selection<D: Component>(mut self) -> Result<()> {
+    pub fn toggle_selection<D: Component>(&mut self) -> Result<()> {
         let flag = FlagsWithData::new_with_data(D::FLAG, D::get_default_data_id());
 
         // TODO: Store start of Selection Range to use in the reload_section.
@@ -153,8 +153,8 @@ impl<'a> NodeContainer<'a> {
 
 pub fn get_nodes_in_selection(
     selection: Selection,
-    data: &'_ SharedListenerData,
-) -> Result<NodeContainer<'_>> {
+    data: SharedListenerData,
+) -> Result<NodeContainer> {
     let range = selection.get_range_at(0)?;
 
     let start_node = range.start_container()?;

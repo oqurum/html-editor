@@ -1,6 +1,6 @@
-use crate::{selection::NodeContainer, ComponentFlag, Result};
+use crate::{ComponentFlag, Result};
 
-use super::Component;
+use super::{Component, Context};
 
 pub struct Underline;
 
@@ -10,10 +10,10 @@ impl Component for Underline {
 
     type Data = ();
 
-    fn on_select(&self, nodes: NodeContainer) -> Result<()> {
+    fn on_select(&self, ctx: &Context) -> Result<()> {
         log::debug!("Underline");
 
-        nodes.toggle_selection::<Self>()?;
+        ctx.nodes.borrow_mut().toggle_selection::<Self>()?;
 
         Ok(())
     }

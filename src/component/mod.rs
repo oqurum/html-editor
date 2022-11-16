@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, rc::Rc, cell::RefCell};
 
 use bitflags::bitflags;
 use num_enum::TryFromPrimitive;
@@ -22,7 +22,7 @@ pub trait Component {
 
     type Data: ComponentData;
 
-    fn on_select(&self, nodes: NodeContainer) -> Result<()>;
+    fn on_select(&self, ctx: &Context) -> Result<()>;
 
     fn on_held(&self) {}
 
@@ -56,6 +56,11 @@ impl ComponentData for () {
     fn from_id(_value: u8) -> Self {}
 }
 
+
+#[derive(Clone)]
+pub struct Context {
+    pub nodes: Rc<RefCell<NodeContainer>>,
+}
 
 bitflags! {
     #[derive(Serialize, Deserialize)]
