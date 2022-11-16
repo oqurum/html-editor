@@ -2,7 +2,7 @@ use gloo_utils::document;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlElement, Node, Text};
 
-use crate::{Result, component::FlagsWithData};
+use crate::{Result, component::FlagsWithData, ComponentFlag};
 
 #[derive(Clone)]
 pub struct TextContainer {
@@ -25,6 +25,12 @@ impl TextContainer {
                 None
             }
         })
+    }
+
+    pub fn get_all_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
+        self.text.iter()
+            .flat_map(|v| v.flag.data.clone())
+            .collect()
     }
 
     pub fn has_flag(&self, flag: &FlagsWithData) -> bool {
@@ -157,6 +163,17 @@ impl ComponentNode {
         other.remove();
 
         Ok(())
+    }
+
+    pub fn change_flags_data(&mut self, flag: ComponentFlag, last_data_pos: u32, new_data_pos: u32) {
+        if self.flag.flag.contains(flag) {
+            for (comp_flag, data) in &mut self.flag.data {
+                if flag == *comp_flag && last_data_pos == *data {
+                    *data = new_data_pos;
+                    break;
+                }
+            }
+        }
     }
 
     pub fn remove(&self) {

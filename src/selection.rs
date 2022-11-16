@@ -4,10 +4,10 @@ use gloo_utils::window;
 use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{Range, Selection, Text};
 
-use crate::{node::get_all_text_nodes_in_container, Result, SharedListenerData, Component, component::FlagsWithData};
+use crate::{node::get_all_text_nodes_in_container, Result, SharedListenerData, Component, component::FlagsWithData, ComponentFlag};
 
 pub struct NodeContainer {
-    data: SharedListenerData,
+    pub(crate) data: SharedListenerData,
 
     nodes: Vec<Text>,
 
@@ -16,6 +16,18 @@ pub struct NodeContainer {
 }
 
 impl NodeContainer {
+    pub fn get_selected_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
+        let page_data = self.data.borrow();
+
+        self.nodes.iter()
+            .filter_map(|text| {
+                let cont = page_data.get_text_container(text)?;
+                Some(cont.get_all_data_ids())
+            })
+            .flatten()
+            .collect()
+    }
+
     pub fn does_selected_contain_any(&self, flag: &FlagsWithData) -> bool {
         let page_data = self.data.borrow();
 
@@ -27,6 +39,39 @@ impl NodeContainer {
         })
     }
 
+    pub fn insert_selection<D: Component>(&mut self, data: Option<u32>) -> Result<()> {
+        let flag = FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
+
+        log::debug!("set component");
+
+        let mut page_data = self.data.borrow_mut();
+
+        for text in &self.nodes {
+            page_data.update_container(text, flag.clone())?;
+        }
+
+        self.reload_selection()?;
+
+        Ok(())
+    }
+
+    pub fn remove_selection<D: Component>(&mut self, data: Option<u32>) -> Result<()> {
+        let flag = FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
+
+        log::debug!("unset component");
+
+        let mut page_data = self.data.borrow_mut();
+
+        for text in &self.nodes {
+            page_data.remove_component_node_flag(text, &flag)?;
+        }
+
+        self.reload_selection()?;
+
+        Ok(())
+    }
+
+    // TODO: Add Optional Data
     pub fn toggle_selection<D: Component>(&mut self) -> Result<()> {
         let flag = FlagsWithData::new_with_data(D::FLAG, D::get_default_data_id());
 

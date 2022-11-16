@@ -1,0 +1,173 @@
+use std::cell::RefCell;
+
+use gloo_utils::{body, document};
+use wasm_bindgen::{JsValue, JsCast, prelude::Closure, UnwrapThrowExt};
+use web_sys::{HtmlElement, HtmlTextAreaElement, Element};
+
+use crate::{ComponentFlag, Result};
+
+use super::{Component, Context};
+
+// TODO: Note should be the only component set for the nodes its' on.
+
+pub struct Note;
+
+impl Component for Note {
+    const FLAG: ComponentFlag = ComponentFlag::NOTE;
+    const TITLE: &'static str = "N";
+
+    type Data = ();
+
+    fn on_select(&self, ctx: &Context) -> Result<()> {
+        log::debug!("Note - Selected {}", ctx.get_selection_data_ids().len());
+
+        show_popup(None, ctx.clone())?;
+
+        Ok(())
+    }
+}
+
+
+thread_local! {
+    static DISPLAYING: RefCell<Option<Popup>> = RefCell::default();
+}
+
+
+#[allow(dead_code)]
+struct Popup {
+    cancel_fn: Closure<dyn FnMut()>,
+    delete_fn: Closure<dyn FnMut()>,
+    save_fn: Closure<dyn FnMut()>,
+
+    text_area: HtmlTextAreaElement,
+    content: Element,
+}
+
+impl Popup {
+    pub fn close(self) {
+        self.content.remove();
+    }
+
+    pub fn value(&self) -> String {
+        self.text_area.value()
+    }
+}
+
+fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
+    let cancel_fn = Closure::once(|| {
+        DISPLAYING.with(|popup| {
+            popup.take().unwrap_throw().close();
+        });
+    });
+
+    let ctxx = ctx.clone();
+    let delete_fn = Closure::once(move || {
+        DISPLAYING.with(move |popup| {
+            let popup = popup.take().unwrap_throw();
+
+            ctxx.remove_selection::<Note>(editing_id).unwrap_throw();
+            // TODO: Best way to remove stored data?
+
+            popup.close();
+
+            ctxx.save();
+        });
+    });
+
+    let save_fn = Closure::once(move || {
+        DISPLAYING.with(move |popup| {
+            let popup = popup.take().unwrap_throw();
+
+            // TODO: Save
+            if let Some(_editing_id) = editing_id {
+                //
+            } else {
+                let data_pos = ctx.store_data::<Note, _>(&popup.value());
+                ctx.insert_selection::<Note>(Some(data_pos)).unwrap_throw();
+            }
+
+            popup.close();
+
+            ctx.save();
+        });
+    });
+
+
+    let content = document().create_element("div")?;
+    content.class_list().add_1("popup")?;
+
+    let inner = document().create_element("div")?;
+    inner.class_list().add_1("popup-container")?;
+
+    {
+        let header = document().create_element("div")?;
+        header.class_list().add_1("popup-header")?;
+        inner.append_child(&header)?;
+
+        let title: HtmlElement = document().create_element("h3")?.unchecked_into();
+        title.set_inner_text("Note");
+        header.append_child(&title)?;
+
+        let cancel: HtmlElement = document().create_element("span")?.unchecked_into();
+        cancel.set_inner_text("X");
+        header.append_child(&cancel)?;
+        cancel.add_event_listener_with_callback("click", cancel_fn.as_ref().unchecked_ref())?;
+    }
+
+    let text_area = {
+        let body = document().create_element("div")?;
+        body.class_list().add_1("popup-body")?;
+        inner.append_child(&body)?;
+
+        let text_area: HtmlTextAreaElement = document().create_element("textarea")?.unchecked_into();
+        body.append_child(&text_area)?;
+
+        text_area
+    };
+
+    {
+        let footer = document().create_element("div")?;
+        footer.class_list().add_1("popup-footer")?;
+        inner.append_child(&footer)?;
+
+        let save: HtmlElement = document().create_element("button")?.unchecked_into();
+        save.set_inner_text("Save");
+        footer.append_child(&save)?;
+        save.add_event_listener_with_callback("click", save_fn.as_ref().unchecked_ref())?;
+
+        let cancel: HtmlElement = document().create_element("button")?.unchecked_into();
+        cancel.set_inner_text("Cancel");
+        footer.append_child(&cancel)?;
+        cancel.add_event_listener_with_callback("click", cancel_fn.as_ref().unchecked_ref())?;
+
+        let delete: HtmlElement = document().create_element("button")?.unchecked_into();
+        delete.set_inner_text("Delete");
+        footer.append_child(&delete)?;
+
+        if editing_id.is_some() {
+            delete.add_event_listener_with_callback("click", delete_fn.as_ref().unchecked_ref())?;
+        } else {
+            delete.set_attribute("disabled", "true")?;
+        }
+    }
+
+    content.append_child(&inner)?;
+
+    body().append_child(&content)?;
+
+    let popup = Popup {
+        cancel_fn,
+        delete_fn,
+        save_fn,
+
+        text_area,
+        content,
+    };
+
+    // TODO: Replace with set once stable.
+    DISPLAYING.with(move |v| {
+        *v.borrow_mut() = Some(popup);
+    });
+
+    Ok(())
+}

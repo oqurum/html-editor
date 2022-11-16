@@ -1,11 +1,11 @@
-use std::{cell::{RefCell, Cell}, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use gloo_utils::document;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent};
 
 use crate::{
-    component::{Component, Highlight, Italicize, Underline, Context},
+    component::{Component, Highlight, Note, Context},
     listener::SharedListenerData,
     selection, ListenerId, Result,
 };
@@ -87,8 +87,9 @@ impl Toolbar {
         self.mouse_down_listener = Some(ignore_mouse_down);
 
         self.create_button(Highlight, data.clone(), func.clone())?;
-        self.create_button(Underline, data.clone(), func.clone())?;
-        self.create_button(Italicize, data.clone(), func.clone())?;
+        self.create_button(Note, data.clone(), func.clone())?;
+        // self.create_button(Underline, data.clone(), func.clone())?;
+        // self.create_button(Italicize, data.clone(), func.clone())?;
 
         // Style Toolbar
         style.set_property("width", &format!("{}px", self.buttons.len() * 30))?;

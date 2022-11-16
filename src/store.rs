@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 use web_sys::{HtmlElement, Text};
 
-use crate::{listener::ListenerData, ComponentNode, ListenerId, Result, component::{FlagsWithData, SingleFlagWithData}};
+use crate::{listener::ListenerData, ComponentNode, ListenerId, Result, component::{FlagsWithData, SingleFlagWithData, ComponentDataStore}, ComponentFlag};
 
 pub fn load_and_register(
     container: HtmlElement,
@@ -19,6 +19,7 @@ pub fn load_and_register(
 
 pub fn save(state: &ListenerData) -> SaveState {
     SaveState {
+        data: state.data.clone(),
         nodes: state
             .nodes
             .iter()
@@ -36,12 +37,16 @@ pub fn save(state: &ListenerData) -> SaveState {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SaveState {
+    pub(crate) data: Vec<ComponentDataStore>,
     pub(crate) nodes: Vec<SavedNode>,
 }
 
 impl SaveState {
     pub(crate) fn into_listener_data(self, nodes: Vec<Text>) -> Result<ListenerData> {
-        let mut listener = ListenerData::new(nodes)?;
+        // ListenerId is set in the listener function.
+        let mut listener = ListenerData::new(ListenerId::unset(), nodes)?;
+
+        listener.data = self.data;
 
         for saved_node in self.nodes {
             let list_node = &mut listener.nodes[saved_node.index];

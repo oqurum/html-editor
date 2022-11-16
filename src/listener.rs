@@ -6,6 +6,7 @@ use std::{
 
 use gloo_utils::document;
 use lazy_static::lazy_static;
+use serde::Serialize;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent, Text};
 
@@ -14,7 +15,7 @@ use crate::{
     node::TextContainer,
     store,
     toolbar::Toolbar,
-    ComponentFlag, Result, component::FlagsWithData,
+    Result, component::{FlagsWithData, ComponentDataStore}, ComponentFlag,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
@@ -33,6 +34,10 @@ thread_local! {
 pub struct ListenerId(usize);
 
 impl ListenerId {
+    pub fn unset() -> Self {
+        Self(0)
+    }
+
     pub fn try_get(&self) -> Option<SharedListenerType> {
         LISTENERS.with(|listeners| {
             let listeners = listeners.borrow();
@@ -69,20 +74,47 @@ impl std::ops::Deref for ListenerId {
     }
 }
 
-#[derive(Default)]
 pub struct ListenerData {
+    pub(crate) listener_id: ListenerId,
+
+    /// Specific Data stored for Components.
+    pub(crate) data: Vec<ComponentDataStore>,
     /// The Text Nodes inside the listener Element. Along with flags for the Text.
     pub(crate) nodes: Vec<TextContainer>,
 }
 
 impl ListenerData {
-    pub fn new(nodes: Vec<Text>) -> Result<Self> {
+    pub fn new(listener_id: ListenerId, nodes: Vec<Text>) -> Result<Self> {
         Ok(Self {
+            listener_id,
+            data: Vec::new(),
             nodes: nodes
                 .into_iter()
                 .map(TextContainer::new)
                 .collect::<Result<_>>()?,
         })
+    }
+
+    pub fn store_data<S: Serialize>(&mut self, flag: ComponentFlag, data: &S) -> u32 {
+        let len = self.data.len() as u32;
+
+        self.data.push(ComponentDataStore::new(flag, data));
+
+        len
+    }
+
+    pub fn remove_data(&mut self, flag: ComponentFlag, data_index: u32) {
+        let value = self.data.swap_remove(data_index as usize);
+        let last_data_pos = self.data.len() as u32;
+
+        assert_eq!(value.0, flag);
+
+        // TODO: Update other data nodes with new Data Position.
+        for node in &mut self.nodes {
+            for text in &mut node.text {
+                text.change_flags_data(flag, last_data_pos, data_index);
+            }
+        }
     }
 
     // TODO: Optimize. We're iterating through two arrays.
@@ -128,7 +160,7 @@ pub struct Listener {
 
 pub fn register_with_data(
     element: HtmlElement,
-    data: ListenerData,
+    mut data: ListenerData,
     on_event: Rc<RefCell<fn(ListenerId)>>,
 ) -> Result<()> {
     LISTENERS.with(|listeners| -> Result<()> {
@@ -142,6 +174,7 @@ pub fn register_with_data(
         let index = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
         let listener_class = create_listener_class(*index);
 
+        data.listener_id = index;
         let listener_data = Rc::new(RefCell::new(data));
         let toolbar = Toolbar::new(index, &listener_data, &on_event)?;
 
@@ -194,7 +227,7 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<fn(ListenerId)>>) -> 
 
         let nodes = crate::node::return_all_text_nodes(&element);
 
-        let listener_data = Rc::new(RefCell::new(ListenerData::new(nodes)?));
+        let listener_data = Rc::new(RefCell::new(ListenerData::new(listener_id, nodes)?));
         let toolbar = Toolbar::new(listener_id, &listener_data, &on_event)?;
 
         // Add class to container element

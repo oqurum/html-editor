@@ -4,6 +4,7 @@ A Book Visual Editor for editing text Eg. Highlight, Underline, Draw, etc.
 When registering the listener it will cache the Text Nodes inside the HTML Element. Which means this library only works with a static webpage after registered.
 
 ## Todo:
+ - Determine if I should include Italicize, Bold.
  - Drawing
  - Notes
  - Referencing

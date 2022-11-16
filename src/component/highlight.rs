@@ -52,11 +52,11 @@ impl ComponentData for HighlightTypes {
         Some(Self::Yellow)
     }
 
-    fn id(&self) -> u8 {
-        (*self).into()
+    fn id(&self) -> u32 {
+        *self as u32
     }
 
-    fn from_id(value: u8) -> Self {
-        HighlightTypes::try_from_primitive(value).unwrap()
+    fn from_id(value: u32) -> Self {
+        HighlightTypes::try_from_primitive(value as u8).unwrap()
     }
 }
