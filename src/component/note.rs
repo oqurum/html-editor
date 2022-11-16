@@ -18,7 +18,7 @@ impl Component for Note {
 
     type Data = ();
 
-    fn on_select(&self, ctx: &Context) -> Result<()> {
+    fn on_click_button(&self, ctx: &Context) -> Result<()> {
         log::debug!("Note - Selected {}", ctx.get_selection_data_ids().len());
 
         show_popup(None, ctx.clone())?;

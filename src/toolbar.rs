@@ -120,7 +120,7 @@ impl Toolbar {
                     nodes: Rc::new(RefCell::new(selection::get_nodes_in_selection(selection, data.clone()).unwrap_throw()))
                 };
 
-                component.on_select(&context).unwrap_throw();
+                component.on_click_button(&context).unwrap_throw();
 
                 (func.borrow_mut())(listener_id);
             }

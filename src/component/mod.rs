@@ -24,7 +24,7 @@ pub trait Component {
 
     type Data: ComponentData;
 
-    fn on_select(&self, ctx: &Context) -> Result<()>;
+    fn on_click_button(&self, ctx: &Context) -> Result<()>;
 
     fn on_held(&self) {}
 
