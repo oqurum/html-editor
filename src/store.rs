@@ -8,7 +8,7 @@ use crate::{listener::ListenerData, ComponentNode, ListenerId, Result, component
 pub fn load_and_register(
     container: HtmlElement,
     state: SaveState,
-    on_event: Rc<RefCell<fn(ListenerId)>>,
+    on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
 ) -> Result<()> {
     let nodes = crate::node::return_all_text_nodes(&container);
 
