@@ -25,6 +25,20 @@ impl Component for Note {
 
         Ok(())
     }
+
+    fn on_click(&self, ctx: &Context) -> Result<()> {
+        log::info!("on_click");
+
+        for (clicked_flag, id) in ctx.get_selection_data_ids() {
+            if clicked_flag == Self::FLAG {
+                show_popup(Some(id), ctx.clone())?;
+
+                break;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 
@@ -60,37 +74,44 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
         });
     });
 
-    let ctxx = ctx.clone();
-    let delete_fn = Closure::once(move || {
-        DISPLAYING.with(move |popup| {
-            let popup = popup.take().unwrap_throw();
+    let delete_fn = {
+        let ctx = ctx.clone();
 
-            ctxx.remove_selection::<Note>(editing_id).unwrap_throw();
-            // TODO: Best way to remove stored data?
+        Closure::once(move || {
+            DISPLAYING.with(move |popup| {
+                let popup = popup.take().unwrap_throw();
 
-            popup.close();
+                ctx.remove_selection::<Note>(editing_id).unwrap_throw();
+                ctx.remove_data::<Note>(editing_id.unwrap());
 
-            ctxx.save();
-        });
-    });
+                popup.close();
 
-    let save_fn = Closure::once(move || {
-        DISPLAYING.with(move |popup| {
-            let popup = popup.take().unwrap_throw();
+                ctx.save();
+            });
+        })
+    };
 
-            // TODO: Save
-            if let Some(_editing_id) = editing_id {
-                //
-            } else {
-                let data_pos = ctx.store_data::<Note, _>(&popup.value());
-                ctx.insert_selection::<Note>(Some(data_pos)).unwrap_throw();
-            }
+    let save_fn = {
+        let ctx = ctx.clone();
 
-            popup.close();
+        Closure::once(move || {
+            DISPLAYING.with(move |popup| {
+                let popup = popup.take().unwrap_throw();
 
-            ctx.save();
-        });
-    });
+                if let Some(editing_id) = editing_id {
+                    ctx.update_data::<Note, _>(editing_id, &popup.value());
+                } else {
+                    ctx.reload_section().unwrap_throw();
+                    let data_pos = ctx.store_data::<Note, _>(&popup.value());
+                    ctx.insert_selection::<Note>(Some(data_pos)).unwrap_throw();
+                }
+
+                popup.close();
+
+                ctx.save();
+            });
+        })
+    };
 
 
     let content = document().create_element("div")?;
@@ -121,6 +142,10 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
 
         let text_area: HtmlTextAreaElement = document().create_element("textarea")?.unchecked_into();
         body.append_child(&text_area)?;
+
+        if let Some(editing_id) = editing_id {
+            text_area.set_value(&ctx.get_data::<Note>(editing_id).parse::<String>())
+        }
 
         text_area
     };

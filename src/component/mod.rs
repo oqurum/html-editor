@@ -26,6 +26,11 @@ pub trait Component {
 
     fn on_click_button(&self, ctx: &Context) -> Result<()>;
 
+    /// If we've clicked text with the Component inside it.
+    fn on_click(&self, _ctx: &Context) -> Result<()> {
+        Ok(())
+    }
+
     fn on_held(&self) {}
 
     fn does_selected_contain_self(nodes: &NodeContainer) -> bool {
@@ -84,12 +89,24 @@ pub struct Context {
 }
 
 impl Context {
+    pub fn reload_section(&self) -> Result<()> {
+        self.nodes.borrow().reload_selection()
+    }
+
     pub fn store_data<D: Component, S: Serialize>(&self, value: &S) -> u32 {
         self.nodes.borrow().data.borrow_mut().store_data(D::FLAG, value)
     }
 
-    pub fn remove_data<D: Component>(&self, value: u32) {
-        self.nodes.borrow().data.borrow_mut().remove_data(D::FLAG, value)
+    pub fn get_data<D: Component>(&self, index: u32) -> ComponentDataStore {
+        self.nodes.borrow().data.borrow().get_data(D::FLAG, index)
+    }
+
+    pub fn update_data<D: Component, S: Serialize>(&self, index: u32, value: &S) {
+        self.nodes.borrow().data.borrow_mut().update_data(D::FLAG, index, value);
+    }
+
+    pub fn remove_data<D: Component>(&self, index: u32) {
+        self.nodes.borrow().data.borrow_mut().remove_data(D::FLAG, index);
     }
 
     pub fn get_selection_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
@@ -101,7 +118,7 @@ impl Context {
     }
 
     pub fn remove_selection<D: Component>(&self, data: Option<u32>) -> Result<()> {
-        self.nodes.borrow_mut().insert_selection::<D>(data)
+        self.nodes.borrow_mut().remove_selection::<D>(data)
     }
 
     pub fn save(&self) {
@@ -121,9 +138,23 @@ bitflags! {
     }
 }
 
-static COMPONENT_FLAGS: [ComponentFlag; 4] = [ ComponentFlag::ITALICIZE, ComponentFlag::HIGHLIGHT, ComponentFlag::UNDERLINE, ComponentFlag::NOTE ];
+static COMPONENT_FLAGS: [ComponentFlag; 4] = [
+    ComponentFlag::ITALICIZE,
+    ComponentFlag::HIGHLIGHT,
+    ComponentFlag::UNDERLINE,
+    ComponentFlag::NOTE,
+];
 
 impl ComponentFlag {
+    pub fn separate_bits(self) -> Vec<Self> {
+        let mut flags = Vec::new();
+
+        COMPONENT_FLAGS.into_iter()
+        .for_each(|v| if self.contains(v) { flags.push(v); });
+
+        flags
+    }
+
     // TODO: Replace with get_data() but we're using Self: Sized for the trait
     pub fn get_data_class(self, value: u32) -> Option<Cow<'static, str>> {
         match self {

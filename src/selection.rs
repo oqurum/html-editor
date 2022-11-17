@@ -44,6 +44,8 @@ impl NodeContainer {
 
         log::debug!("set component");
 
+        self.split_and_acq_text_nodes()?;
+
         let mut page_data = self.data.borrow_mut();
 
         for text in &self.nodes {
@@ -59,6 +61,9 @@ impl NodeContainer {
         let flag = FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
 
         log::debug!("unset component");
+
+        // TODO: Should I split when removing selection?
+        // self.split_and_acq_text_nodes()?;
 
         let mut page_data = self.data.borrow_mut();
 
@@ -102,7 +107,7 @@ impl NodeContainer {
         Ok(())
     }
 
-    fn reload_selection(&self) -> Result<()> {
+    pub fn reload_selection(&self) -> Result<()> {
         let selection = window().get_selection()?.unwrap();
 
         selection.remove_all_ranges()?;
@@ -216,5 +221,19 @@ pub fn get_nodes_in_selection(
 
         start_offset: range.start_offset()?,
         end_offset: range.end_offset()?,
+    })
+}
+
+
+pub fn create_container(
+    nodes: Vec<Text>,
+    data: SharedListenerData,
+) -> Result<NodeContainer> {
+    Ok(NodeContainer {
+        data,
+        nodes,
+
+        start_offset: 0,
+        end_offset: 0,
     })
 }

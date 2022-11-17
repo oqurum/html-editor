@@ -4,7 +4,7 @@ use web_sys::{HtmlElement, Node, Text};
 
 use crate::{Result, component::FlagsWithData, ComponentFlag};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TextContainer {
     /// The non-split Text `Node` or split `Node`s
     pub(crate) text: Vec<ComponentNode>,
@@ -112,7 +112,7 @@ impl TextContainer {
 }
 
 /// Nodes which have display wrappers for the text(?) components
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ComponentNode {
     /// Span container around the text node.
     container: HtmlElement,

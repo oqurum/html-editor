@@ -8,14 +8,14 @@ use gloo_utils::document;
 use lazy_static::lazy_static;
 use serde::Serialize;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
-use web_sys::{HtmlElement, MouseEvent, Text};
+use web_sys::{HtmlElement, MouseEvent, Text, Element, Node};
 
 use crate::{
     helper::{parents_contains_class, TargetCast},
     node::TextContainer,
     store,
     toolbar::Toolbar,
-    Result, component::{FlagsWithData, ComponentDataStore}, ComponentFlag,
+    Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
@@ -30,7 +30,7 @@ thread_local! {
     static LISTENERS: RefCell<Vec<SharedListenerType>> = RefCell::new(Vec::new());
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ListenerId(usize);
 
 impl ListenerId {
@@ -74,6 +74,7 @@ impl std::ops::Deref for ListenerId {
     }
 }
 
+#[derive(Debug)]
 pub struct ListenerData {
     pub(crate) listener_id: ListenerId,
 
@@ -101,6 +102,23 @@ impl ListenerData {
         self.data.push(ComponentDataStore::new(flag, data));
 
         len
+    }
+
+    // Flag is only used for assert.
+    pub fn get_data(&self, flag: ComponentFlag, data_index: u32) -> ComponentDataStore {
+        let data_item = self.data[data_index as usize].clone();
+
+        assert_eq!(data_item.0, flag);
+
+        data_item
+    }
+
+    pub fn update_data<S: Serialize>(&mut self, flag: ComponentFlag, data_index: u32, data: &S) {
+        let data_item = &mut self.data[data_index as usize];
+
+        assert_eq!(data_item.0, flag);
+
+        *data_item = ComponentDataStore::new(flag, data);
     }
 
     pub fn remove_data(&mut self, flag: ComponentFlag, data_index: u32) {
@@ -245,6 +263,19 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<fn(ListenerId)>>) -> 
             data: listener_data,
         }));
 
+        // Create the on click listener
+        let listener = listener_rc.clone();
+        let listener_class2 = listener_class.clone();
+        let function: Closure<dyn FnMut(MouseEvent)> = Closure::new(move |event: MouseEvent| {
+            handle_listener_mouseclick(event, &listener_class2, &listener).unwrap_throw();
+        });
+
+        document()
+            .add_event_listener_with_callback("click", function.as_ref().unchecked_ref())?;
+
+        // TODO
+        function.forget();
+
         // Create the initial listener
         let listener = listener_rc.clone();
         let function = Closure::wrap(Box::new(move |event: MouseEvent| {
@@ -260,6 +291,65 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<fn(ListenerId)>>) -> 
 
         Ok(())
     })?;
+
+    Ok(())
+}
+
+
+
+
+fn handle_listener_mouseclick(
+    event: MouseEvent,
+    listening_class: &str,
+    handler: &SharedListenerType,
+) -> Result<()> {
+    if !parents_contains_class(event.target_unchecked_into(), listening_class) {
+        return Ok(());
+    }
+
+    if document().get_selection()?.unwrap_throw().is_collapsed() {
+        let handle = handler.borrow();
+        let data = handle.data.borrow();
+
+        let mut flags = ComponentFlag::empty();
+
+        let mut text_nodes = Vec::new();
+        let mut inside = event.target_unchecked_into::<Element>().first_child();
+
+        // TODO: Improve
+        while let Some(container) = inside {
+            inside = container.next_sibling();
+
+            if container.node_type() == Node::TEXT_NODE {
+                if let Some(cont) = data.get_text_container(container.unchecked_ref()) {
+                    for comp_node in &cont.text {
+                        if comp_node.node.unchecked_ref::<Node>() == &container {
+                            text_nodes.push(container.unchecked_into());
+                            flags.insert(comp_node.flag.flag);
+
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        let ctx = Context {
+            nodes: Rc::new(RefCell::new(selection::create_container(text_nodes, handle.data.clone()).unwrap_throw()))
+        };
+
+        // TODO: Improve
+        for flag in flags.separate_bits() {
+            match flag {
+                ComponentFlag::ITALICIZE => crate::component::Italicize.on_click(&ctx).unwrap_throw(),
+                ComponentFlag::HIGHLIGHT => crate::component::Highlight.on_click(&ctx).unwrap_throw(),
+                ComponentFlag::UNDERLINE => crate::component::Underline.on_click(&ctx).unwrap_throw(),
+                ComponentFlag::NOTE => crate::component::Note.on_click(&ctx).unwrap_throw(),
+
+                _ => unreachable!(),
+            }
+        }
+    }
 
     Ok(())
 }
