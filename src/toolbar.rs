@@ -23,7 +23,7 @@ impl Toolbar {
     pub fn new(
         listener_id: ListenerId,
         data: &SharedListenerData,
-        func: &Rc<RefCell<fn(ListenerId)>>,
+        func: &Rc<RefCell<dyn Fn(ListenerId)>>,
     ) -> Result<Self> {
         let mut this = Self {
             popup: document().create_element("div")?.unchecked_into(),
@@ -67,7 +67,7 @@ impl Toolbar {
     fn create_popup(
         &mut self,
         data: &SharedListenerData,
-        func: &Rc<RefCell<fn(ListenerId)>>,
+        func: &Rc<RefCell<dyn Fn(ListenerId)>>,
     ) -> Result<()> {
         let element = &self.popup;
         element.set_class_name("toolbar");
@@ -101,7 +101,7 @@ impl Toolbar {
         &mut self,
         component: C,
         data: SharedListenerData,
-        func: Rc<RefCell<fn(ListenerId)>>,
+        func: Rc<RefCell<dyn Fn(ListenerId)>>,
     ) -> Result<()> {
         let listener_id = self.listener_id;
 

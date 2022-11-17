@@ -166,7 +166,7 @@ impl ListenerData {
 pub struct Listener {
     pub listener_id: ListenerId,
 
-    pub on_event: Rc<RefCell<fn(ListenerId)>>,
+    pub on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
 
     pub element: HtmlElement,
     pub function: Option<Closure<dyn Fn(MouseEvent)>>,
@@ -179,7 +179,7 @@ pub struct Listener {
 pub fn register_with_data(
     element: HtmlElement,
     mut data: ListenerData,
-    on_event: Rc<RefCell<fn(ListenerId)>>,
+    on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
 ) -> Result<()> {
     LISTENERS.with(|listeners| -> Result<()> {
         let mut listeners = listeners.borrow_mut();
@@ -231,7 +231,7 @@ pub fn register_with_data(
 }
 
 /// Should be called AFTER page has fully loaded and finished any Element changes.
-pub fn register(element: HtmlElement, on_event: Rc<RefCell<fn(ListenerId)>>) -> Result<()> {
+pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>) -> Result<()> {
     LISTENERS.with(|listeners| -> Result<()> {
         let mut listeners = listeners.borrow_mut();
 
