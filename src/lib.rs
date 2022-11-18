@@ -8,6 +8,7 @@ mod node;
 mod selection;
 mod store;
 pub mod toolbar;
+mod util;
 
 pub type Result<V, E = JsValue> = std::result::Result<V, E>;
 

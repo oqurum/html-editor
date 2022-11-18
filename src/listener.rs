@@ -15,7 +15,7 @@ use crate::{
     node::TextContainer,
     store,
     toolbar::Toolbar,
-    Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection,
+    Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection, util::ElementEvent,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
@@ -170,7 +170,7 @@ pub struct Listener {
     pub on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
 
     pub element: HtmlElement,
-    pub function: Option<Closure<dyn Fn(MouseEvent)>>,
+    functions: Vec<ElementEvent>,
 
     pub data: Rc<RefCell<ListenerData>>,
 
@@ -227,7 +227,7 @@ pub fn register_with_data(
             on_event,
 
             element,
-            function: None,
+            functions: Vec::new(),
             toolbar,
 
             data: listener_data,
@@ -239,10 +239,12 @@ pub fn register_with_data(
             handle_listener_mouseup(event, &listener_class, &listener).unwrap_throw();
         }) as Box<dyn Fn(MouseEvent)>);
 
-        document()
-            .add_event_listener_with_callback("mouseup", function.as_ref().unchecked_ref())?;
-
-        listener_rc.borrow_mut().function = Some(function);
+        listener_rc.borrow_mut().functions.push(ElementEvent::link(
+            document().unchecked_into(),
+            function,
+            |t, f| t.add_event_listener_with_callback("mouseup", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("mouseup", f)),
+        ));
 
         listeners.push(listener_rc);
 
@@ -277,7 +279,7 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
             on_event,
 
             element,
-            function: None,
+            functions: Vec::new(),
             toolbar,
 
             data: listener_data,
@@ -290,11 +292,12 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
             handle_listener_mouseclick(event, &listener_class2, &listener).unwrap_throw();
         });
 
-        document()
-            .add_event_listener_with_callback("click", function.as_ref().unchecked_ref())?;
-
-        // TODO
-        function.forget();
+        listener_rc.borrow_mut().functions.push(ElementEvent::link(
+            document().unchecked_into(),
+            function,
+            |t, f| t.add_event_listener_with_callback("click", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+        ));
 
         // Create the initial listener
         let listener = Rc::downgrade(&listener_rc);
@@ -302,10 +305,12 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
             handle_listener_mouseup(event, &listener_class, &listener).unwrap_throw();
         }) as Box<dyn Fn(MouseEvent)>);
 
-        document()
-            .add_event_listener_with_callback("mouseup", function.as_ref().unchecked_ref())?;
-
-        listener_rc.borrow_mut().function = Some(function);
+        listener_rc.borrow_mut().functions.push(ElementEvent::link(
+            document().unchecked_into(),
+            function,
+            |t, f| t.add_event_listener_with_callback("mouseup", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("mouseup", f)),
+        ));
 
         listeners.push(listener_rc);
 
