@@ -3,18 +3,16 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 use web_sys::{HtmlElement, Text};
 
-use crate::{listener::ListenerData, ComponentNode, ListenerId, Result, component::{FlagsWithData, SingleFlagWithData, ComponentDataStore}, ComponentFlag};
+use crate::{listener::{ListenerData, ListenerHandle, register_with_data}, ComponentNode, ListenerId, Result, component::{FlagsWithData, SingleFlagWithData, ComponentDataStore}};
 
 pub fn load_and_register(
     container: HtmlElement,
     state: SaveState,
     on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
-) -> Result<()> {
+) -> Result<ListenerHandle> {
     let nodes = crate::node::return_all_text_nodes(&container);
 
-    crate::listener::register_with_data(container, state.into_listener_data(nodes)?, on_event)?;
-
-    Ok(())
+    register_with_data(container, state.into_listener_data(nodes)?, on_event)
 }
 
 pub fn save(state: &ListenerData) -> SaveState {
@@ -35,7 +33,7 @@ pub fn save(state: &ListenerData) -> SaveState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveState {
     pub(crate) data: Vec<ComponentDataStore>,
     pub(crate) nodes: Vec<SavedNode>,
@@ -74,7 +72,7 @@ impl SaveState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedNode {
     /// Node Index
     index: usize,
@@ -97,7 +95,7 @@ impl SavedNode {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedNodeFlag {
     offset: u32,
     // TODO: Should I change to vec with SingleFlagWithData?

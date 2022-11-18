@@ -22,7 +22,7 @@ pub struct Toolbar {
 impl Toolbar {
     pub fn new(
         listener_id: ListenerId,
-        data: &SharedListenerData,
+        data: SharedListenerData,
         func: &Rc<RefCell<dyn Fn(ListenerId)>>,
     ) -> Result<Self> {
         let mut this = Self {
@@ -66,7 +66,7 @@ impl Toolbar {
 
     fn create_popup(
         &mut self,
-        data: &SharedListenerData,
+        data: SharedListenerData,
         func: &Rc<RefCell<dyn Fn(ListenerId)>>,
     ) -> Result<()> {
         let element = &self.popup;
@@ -87,7 +87,7 @@ impl Toolbar {
         self.mouse_down_listener = Some(ignore_mouse_down);
 
         self.create_button(Highlight, data.clone(), func.clone())?;
-        self.create_button(Note, data.clone(), func.clone())?;
+        self.create_button(Note, data, func.clone())?;
         // self.create_button(Underline, data.clone(), func.clone())?;
         // self.create_button(Italicize, data.clone(), func.clone())?;
 

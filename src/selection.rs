@@ -17,7 +17,8 @@ pub struct NodeContainer {
 
 impl NodeContainer {
     pub fn get_selected_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
-        let page_data = self.data.borrow();
+        let page_data = self.data.upgrade().expect_throw("data upgrade");
+        let page_data = page_data.borrow();
 
         self.nodes.iter()
             .filter_map(|text| {
@@ -28,8 +29,21 @@ impl NodeContainer {
             .collect()
     }
 
-    pub fn does_selected_contain_any(&self, flag: &FlagsWithData) -> bool {
-        let page_data = self.data.borrow();
+    pub fn does_selected_intersect(&self, flag: ComponentFlag) -> bool {
+        let page_data = self.data.upgrade().expect_throw("data upgrade");
+        let page_data = page_data.borrow();
+
+        self.nodes.iter().any(|text| {
+            page_data
+                .get_text_container(text)
+                .filter(|v| v.intersects_flag(flag))
+                .is_some()
+        })
+    }
+
+    pub fn does_selected_contain(&self, flag: &FlagsWithData) -> bool {
+        let page_data = self.data.upgrade().expect_throw("data upgrade");
+        let page_data = page_data.borrow();
 
         self.nodes.iter().any(|text| {
             page_data
@@ -39,14 +53,20 @@ impl NodeContainer {
         })
     }
 
-    pub fn insert_selection<D: Component>(&mut self, data: Option<u32>) -> Result<()> {
+    pub fn insert_selection<D: Component>(&mut self, data: Option<u32>) -> Result<bool> {
         let flag = FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
+
+        if self.does_selected_intersect(D::ALLOWED_SIBLINGS.complement()) {
+            log::error!("Not Allowed");
+            return Ok(false);
+        }
 
         log::debug!("set component");
 
         self.split_and_acq_text_nodes()?;
 
-        let mut page_data = self.data.borrow_mut();
+        let page_data = self.data.upgrade().expect_throw("data upgrade");
+        let mut page_data = page_data.borrow_mut();
 
         for text in &self.nodes {
             page_data.update_container(text, flag.clone())?;
@@ -54,10 +74,10 @@ impl NodeContainer {
 
         self.reload_selection()?;
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn remove_selection<D: Component>(&mut self, data: Option<u32>) -> Result<()> {
+    pub fn remove_selection<D: Component>(&mut self, data: Option<u32>) -> Result<bool> {
         let flag = FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
 
         log::debug!("unset component");
@@ -65,7 +85,8 @@ impl NodeContainer {
         // TODO: Should I split when removing selection?
         // self.split_and_acq_text_nodes()?;
 
-        let mut page_data = self.data.borrow_mut();
+        let page_data = self.data.upgrade().expect_throw("data upgrade");
+        let mut page_data = page_data.borrow_mut();
 
         for text in &self.nodes {
             page_data.remove_component_node_flag(text, &flag)?;
@@ -73,21 +94,25 @@ impl NodeContainer {
 
         self.reload_selection()?;
 
-        Ok(())
+        Ok(true)
     }
 
     // TODO: Add Optional Data
-    pub fn toggle_selection<D: Component>(&mut self) -> Result<()> {
+    pub fn toggle_selection<D: Component>(&mut self) -> Result<bool> {
         let flag = FlagsWithData::new_with_data(D::FLAG, D::get_default_data_id());
 
-        // TODO: Store start of Selection Range to use in the reload_section.
+        if self.does_selected_intersect(D::ALLOWED_SIBLINGS.complement()) {
+            log::error!("Not Allowed");
+            return Ok(false);
+        }
 
         self.split_and_acq_text_nodes()?;
 
-        if self.does_selected_contain_any(&flag) {
+        if self.does_selected_contain(&flag) {
             log::debug!("unset component");
 
-            let mut page_data = self.data.borrow_mut();
+            let page_data = self.data.upgrade().expect_throw("data upgrade");
+            let mut page_data = page_data.borrow_mut();
 
             for text in &self.nodes {
                 page_data.remove_component_node_flag(text, &flag)?;
@@ -95,7 +120,8 @@ impl NodeContainer {
         } else {
             log::debug!("set component");
 
-            let mut page_data = self.data.borrow_mut();
+            let page_data = self.data.upgrade().expect_throw("data upgrade");
+            let mut page_data = page_data.borrow_mut();
 
             for text in &self.nodes {
                 page_data.update_container(text, flag.clone())?;
@@ -104,7 +130,7 @@ impl NodeContainer {
 
         self.reload_selection()?;
 
-        Ok(())
+        Ok(true)
     }
 
     pub fn reload_selection(&self) -> Result<()> {
@@ -172,7 +198,8 @@ impl NodeContainer {
     ) -> Result<()> {
         // TODO: Determine if we should remove white-space from the end of a text node.
 
-        let mut page_data = self.data.borrow_mut();
+        let page_data = self.data.upgrade().expect_throw("data upgrade");
+        let mut page_data = page_data.borrow_mut();
 
         // If component node already exists.
         let comp_node = page_data.get_text_container_mut(&text).unwrap_throw();

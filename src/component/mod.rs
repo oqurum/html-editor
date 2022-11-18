@@ -13,14 +13,24 @@ pub use highlight::*;
 pub use italicize::*;
 pub use note::*;
 pub use underline::*;
+use wasm_bindgen::UnwrapThrowExt;
 
 use crate::{selection::NodeContainer, Result};
 
 pub static STYLING_PREFIX_CLASS: &str = "editor-styling";
 
 pub trait Component {
+    /// The Buttons' Title of the component.
     const TITLE: &'static str;
+
+    /// The flag the component consists of.
     const FLAG: ComponentFlag;
+
+    /// The Allowed Components that are able to share this components' space.
+    const ALLOWED_SIBLINGS: ComponentFlag = ComponentFlag::all();
+
+    /// Should this component overwrite invalid siblings before inserting itself?
+    const OVERWRITE_INVALID: bool = false;
 
     type Data: ComponentData;
 
@@ -34,7 +44,7 @@ pub trait Component {
     fn on_held(&self) {}
 
     fn does_selected_contain_self(nodes: &NodeContainer) -> bool {
-        nodes.does_selected_contain_any(&FlagsWithData::new_flag(Self::FLAG))
+        nodes.does_selected_contain(&FlagsWithData::new_flag(Self::FLAG))
     }
 
     fn get_default_data_id() -> u32 {
@@ -94,35 +104,35 @@ impl Context {
     }
 
     pub fn store_data<D: Component, S: Serialize>(&self, value: &S) -> u32 {
-        self.nodes.borrow().data.borrow_mut().store_data(D::FLAG, value)
+        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow_mut().store_data(D::FLAG, value)
     }
 
     pub fn get_data<D: Component>(&self, index: u32) -> ComponentDataStore {
-        self.nodes.borrow().data.borrow().get_data(D::FLAG, index)
+        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow().get_data(D::FLAG, index)
     }
 
     pub fn update_data<D: Component, S: Serialize>(&self, index: u32, value: &S) {
-        self.nodes.borrow().data.borrow_mut().update_data(D::FLAG, index, value);
+        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow_mut().update_data(D::FLAG, index, value);
     }
 
     pub fn remove_data<D: Component>(&self, index: u32) {
-        self.nodes.borrow().data.borrow_mut().remove_data(D::FLAG, index);
+        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow_mut().remove_data(D::FLAG, index);
     }
 
     pub fn get_selection_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
         self.nodes.borrow().get_selected_data_ids()
     }
 
-    pub fn insert_selection<D: Component>(&self, data: Option<u32>) -> Result<()> {
+    pub fn insert_selection<D: Component>(&self, data: Option<u32>) -> Result<bool> {
         self.nodes.borrow_mut().insert_selection::<D>(data)
     }
 
-    pub fn remove_selection<D: Component>(&self, data: Option<u32>) -> Result<()> {
+    pub fn remove_selection<D: Component>(&self, data: Option<u32>) -> Result<bool> {
         self.nodes.borrow_mut().remove_selection::<D>(data)
     }
 
     pub fn save(&self) {
-        let id = self.nodes.borrow().data.borrow().listener_id;
+        let id = self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow().listener_id;
 
         id.try_get().unwrap().borrow().on_event.borrow()(id);
     }
@@ -222,6 +232,11 @@ impl FlagsWithData {
         self.flag.is_empty()
     }
 
+    /// Returns true if there are flags common to both.
+    pub fn intersects_flag(&self, value: ComponentFlag) -> bool {
+        self.flag.intersects(value)
+    }
+
     // TODO: Rename to Contains Flag
     pub fn contains(&self, value: &Self) -> bool {
         if self.flag.contains(value.flag) {
@@ -249,6 +264,11 @@ impl FlagsWithData {
         }
 
         self.data.sort_unstable();
+    }
+
+    pub fn clear(&mut self) {
+        self.flag = ComponentFlag::empty();
+        self.data.clear();
     }
 
     pub fn remove(&mut self, value: &Self) {

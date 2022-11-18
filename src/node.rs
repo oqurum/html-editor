@@ -37,6 +37,10 @@ impl TextContainer {
         self.text.iter().any(|v| v.has_flag(flag))
     }
 
+    pub fn intersects_flag(&self, value: ComponentFlag) -> bool {
+        self.text.iter().any(|v| v.intersects_flag(value))
+    }
+
     pub fn are_all_flags_empty(&self) -> bool {
         self.text.iter().all(|v| v.are_flags_empty())
     }
@@ -108,6 +112,22 @@ impl TextContainer {
         }
 
         unreachable!()
+    }
+}
+
+impl Drop for TextContainer {
+    fn drop(&mut self) {
+        while let Some((index, comp)) = self
+            .text
+            .iter_mut()
+            .enumerate()
+            .find(|(_, v)| !v.are_flags_empty())
+        {
+            let _ = comp.remove_all_flag().map_err(|e| log::error!("{e:?}"));
+
+            let _ = try_join_component_into_surroundings(index, &mut self.text)
+                .map_err(|e| log::error!("{e:?}"));
+        }
     }
 }
 
@@ -185,8 +205,17 @@ impl ComponentNode {
         self.flag.is_empty()
     }
 
+    pub fn intersects_flag(&self, value: ComponentFlag) -> bool {
+        self.flag.intersects_flag(value)
+    }
+
     pub fn has_flag(&self, value: &FlagsWithData) -> bool {
         self.flag.contains(value)
+    }
+
+    pub fn remove_all_flag(&mut self) -> Result<()> {
+        self.flag.clear();
+        self.update_container()
     }
 
     pub fn remove_flag(&mut self, value: &FlagsWithData) -> Result<()> {

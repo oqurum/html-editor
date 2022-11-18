@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    rc::Rc,
+    rc::{Rc, Weak},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -19,7 +19,7 @@ use crate::{
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
-pub type SharedListenerData = Rc<RefCell<ListenerData>>;
+pub type SharedListenerData = Weak<RefCell<ListenerData>>;
 // TODO: Fix. I don't like all these Rc's
 
 lazy_static! {
@@ -163,6 +163,7 @@ impl ListenerData {
     }
 }
 
+
 pub struct Listener {
     pub listener_id: ListenerId,
 
@@ -171,17 +172,38 @@ pub struct Listener {
     pub element: HtmlElement,
     pub function: Option<Closure<dyn Fn(MouseEvent)>>,
 
-    pub data: SharedListenerData,
+    pub data: Rc<RefCell<ListenerData>>,
 
     toolbar: Toolbar,
+}
+
+/// Keeps the listener active until we're dropped.
+pub struct ListenerHandle(ListenerId);
+
+impl Drop for ListenerHandle {
+    fn drop(&mut self) {
+        LISTENERS.with(|listeners| {
+            let mut listeners = listeners.borrow_mut();
+
+            if let Some(index) = listeners.iter().position(|v| v.borrow().listener_id == self.0) {
+                let listener = listeners.remove(index);
+
+                let listener_class = create_listener_class(*self.0);
+
+                let _ = listener.borrow().element.class_list().remove_1(&listener_class);
+
+                log::debug!("Dropping Handle {:?}", self.0);
+            }
+        });
+    }
 }
 
 pub fn register_with_data(
     element: HtmlElement,
     mut data: ListenerData,
     on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
-) -> Result<()> {
-    LISTENERS.with(|listeners| -> Result<()> {
+) -> Result<ListenerHandle> {
+    LISTENERS.with(|listeners| -> Result<ListenerHandle> {
         let mut listeners = listeners.borrow_mut();
 
         // TODO: Check that we also aren't inside another listener.
@@ -194,7 +216,7 @@ pub fn register_with_data(
 
         data.listener_id = index;
         let listener_data = Rc::new(RefCell::new(data));
-        let toolbar = Toolbar::new(index, &listener_data, &on_event)?;
+        let toolbar = Toolbar::new(index, Rc::downgrade(&listener_data), &on_event)?;
 
         // Add class to container element
         element.class_list().add_1(&listener_class)?;
@@ -212,7 +234,7 @@ pub fn register_with_data(
         }));
 
         // Create the initial listener
-        let listener = listener_rc.clone();
+        let listener = Rc::downgrade(&listener_rc);
         let function = Closure::wrap(Box::new(move |event: MouseEvent| {
             handle_listener_mouseup(event, &listener_class, &listener).unwrap_throw();
         }) as Box<dyn Fn(MouseEvent)>);
@@ -224,15 +246,13 @@ pub fn register_with_data(
 
         listeners.push(listener_rc);
 
-        Ok(())
-    })?;
-
-    Ok(())
+        Ok(ListenerHandle(index))
+    })
 }
 
 /// Should be called AFTER page has fully loaded and finished any Element changes.
-pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>) -> Result<()> {
-    LISTENERS.with(|listeners| -> Result<()> {
+pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>) -> Result<ListenerHandle> {
+    LISTENERS.with(|listeners| -> Result<ListenerHandle> {
         let mut listeners = listeners.borrow_mut();
 
         // TODO: Check that we also aren't inside another listener.
@@ -246,7 +266,7 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
         let nodes = crate::node::return_all_text_nodes(&element);
 
         let listener_data = Rc::new(RefCell::new(ListenerData::new(listener_id, nodes)?));
-        let toolbar = Toolbar::new(listener_id, &listener_data, &on_event)?;
+        let toolbar = Toolbar::new(listener_id, Rc::downgrade(&listener_data), &on_event)?;
 
         // Add class to container element
         element.class_list().add_1(&listener_class)?;
@@ -264,7 +284,7 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
         }));
 
         // Create the on click listener
-        let listener = listener_rc.clone();
+        let listener = Rc::downgrade(&listener_rc);
         let listener_class2 = listener_class.clone();
         let function: Closure<dyn FnMut(MouseEvent)> = Closure::new(move |event: MouseEvent| {
             handle_listener_mouseclick(event, &listener_class2, &listener).unwrap_throw();
@@ -277,7 +297,7 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
         function.forget();
 
         // Create the initial listener
-        let listener = listener_rc.clone();
+        let listener = Rc::downgrade(&listener_rc);
         let function = Closure::wrap(Box::new(move |event: MouseEvent| {
             handle_listener_mouseup(event, &listener_class, &listener).unwrap_throw();
         }) as Box<dyn Fn(MouseEvent)>);
@@ -289,10 +309,8 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
 
         listeners.push(listener_rc);
 
-        Ok(())
-    })?;
-
-    Ok(())
+        Ok(ListenerHandle(listener_id))
+    })
 }
 
 
@@ -301,14 +319,15 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
 fn handle_listener_mouseclick(
     event: MouseEvent,
     listening_class: &str,
-    handler: &SharedListenerType,
+    handler: &Weak<RefCell<Listener>>,
 ) -> Result<()> {
     if !parents_contains_class(event.target_unchecked_into(), listening_class) {
         return Ok(());
     }
 
     if document().get_selection()?.unwrap_throw().is_collapsed() {
-        let handle = handler.borrow();
+        let handle = handler.upgrade().expect_throw("Upgrade Listener");
+        let handle = handle.borrow();
         let data = handle.data.borrow();
 
         let mut flags = ComponentFlag::empty();
@@ -335,7 +354,7 @@ fn handle_listener_mouseclick(
         }
 
         let ctx = Context {
-            nodes: Rc::new(RefCell::new(selection::create_container(text_nodes, handle.data.clone()).unwrap_throw()))
+            nodes: Rc::new(RefCell::new(selection::create_container(text_nodes, Rc::downgrade(&handle.data)).unwrap_throw()))
         };
 
         // TODO: Improve
@@ -357,23 +376,23 @@ fn handle_listener_mouseclick(
 fn handle_listener_mouseup(
     event: MouseEvent,
     listening_class: &str,
-    handler: &SharedListenerType,
+    handler: &Weak<RefCell<Listener>>,
 ) -> Result<()> {
     if !parents_contains_class(event.target_unchecked_into(), listening_class) {
         return Ok(());
     }
+
+    let handler = handler.upgrade().expect_throw("Upgrade Listener");
+    let mut handler = handler.borrow_mut();
 
     if let Some(selection) = document().get_selection()?.filter(|v| !v.is_collapsed()) {
         let range = selection.get_range_at(0).unwrap_throw();
 
         let bb = range.get_bounding_client_rect();
 
-        handler
-            .borrow_mut()
-            .toolbar
-            .open(bb.x(), bb.y(), bb.width())?;
+        handler.toolbar.open(bb.x(), bb.y(), bb.width())?;
     } else {
-        handler.borrow_mut().toolbar.close();
+        handler.toolbar.close();
     }
 
     Ok(())
