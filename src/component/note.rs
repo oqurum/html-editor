@@ -106,7 +106,10 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
                 } else {
                     ctx.reload_section().unwrap_throw();
                     let data_pos = ctx.store_data::<Note, _>(&popup.value());
-                    ctx.insert_selection::<Note>(Some(data_pos)).unwrap_throw();
+                    if !ctx.insert_selection::<Note>(Some(data_pos)).unwrap_throw() {
+                        // Remove Inserted data if we're unable to insert
+                        ctx.remove_data::<Note>(data_pos);
+                    }
                 }
 
                 popup.close();
