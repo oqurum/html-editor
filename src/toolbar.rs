@@ -38,22 +38,27 @@ impl Toolbar {
     }
 
     pub fn open(&mut self, x: f64, y: f64, selected_width: f64) -> Result<()> {
+        const HEIGHT: f64 = 30.0;
+
         self.close();
 
         let style = self.popup.style();
 
-        let width = 90.0; // TODO: Remove static width
-        let height = 30.0;
-
         style.set_property(
             "left",
             &format!(
-                "calc({x}px + {}px - {}px)",
-                selected_width / 2.0,
-                width / 2.0
+                "{}px",
+                x + selected_width / 2.0,
             ),
         )?;
-        style.set_property("top", &format!("calc({y}px - {height}px - 3px)"))?;
+
+        style.set_property(
+            "top",
+            &format!(
+                "{}px",
+                y - HEIGHT - 3.0,
+            )
+        )?;
 
         document().body().unwrap_throw().append_child(&self.popup)?;
 
