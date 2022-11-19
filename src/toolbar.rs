@@ -1,5 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
+use chrono::{Utc, Duration};
 use gloo_utils::document;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent};
@@ -7,7 +8,7 @@ use web_sys::{HtmlElement, MouseEvent};
 use crate::{
     component::{Component, Highlight, Note, Context},
     listener::SharedListenerData,
-    selection, ListenerId, Result,
+    selection, ListenerId, Result, util::ElementEvent,
 };
 
 pub struct Toolbar {
@@ -110,29 +111,58 @@ impl Toolbar {
         element.set_inner_text(C::TITLE);
         element.set_class_name("button");
 
-        let function = Closure::wrap(Box::new(move || {
-            if let Some(selection) = document()
-                .get_selection()
-                .unwrap_throw()
-                .filter(|v| !v.is_collapsed())
-            {
-                let context = Context {
-                    nodes: Rc::new(RefCell::new(selection::get_nodes_in_selection(selection, data.clone()).unwrap_throw()))
-                };
-
-                component.on_click_button(&context).unwrap_throw();
-
-                (func.borrow_mut())(listener_id);
-            }
-        }) as Box<dyn Fn()>);
-
-        element.add_event_listener_with_callback("click", function.as_ref().unchecked_ref())?;
-        // TODO: On Hold Event
-
-        // Add Button to Toolbar
         self.popup.append_child(&element)?;
 
-        self.buttons.push(Button { element, function });
+
+        let last_clicked = Rc::new(RefCell::new(Utc::now()));
+
+        let mut events = Vec::new();
+
+        // Create the mouse down listener
+        {
+            let last_clicked = last_clicked.clone();
+
+            let function = Closure::wrap(Box::new(move |_event: MouseEvent| {
+                *last_clicked.borrow_mut() = Utc::now();
+            }) as Box<dyn Fn(MouseEvent)>);
+
+            events.push(ElementEvent::link(
+                element.clone().unchecked_into(),
+                function,
+                |t, f| t.add_event_listener_with_callback("mousedown", f),
+                Box::new(|t, f| t.remove_event_listener_with_callback("mousedown", f)),
+            ));
+        }
+
+        // Create the mouse up listener
+        {
+            let function = Closure::wrap(Box::new(move || {
+                if Utc::now().signed_duration_since(*last_clicked.borrow()) >= Duration::milliseconds(500) {
+                    // TODO
+                } else if let Some(selection) = document()
+                    .get_selection()
+                    .unwrap_throw()
+                    .filter(|v| !v.is_collapsed())
+                {
+                    let context = Context {
+                        nodes: Rc::new(RefCell::new(selection::get_nodes_in_selection(selection, data.clone()).unwrap_throw()))
+                    };
+
+                    component.on_click_button(&context).unwrap_throw();
+
+                    (func.borrow_mut())(listener_id);
+                }
+            }) as Box<dyn Fn()>);
+
+            events.push(ElementEvent::link(
+                element.clone().unchecked_into(),
+                function,
+                |t, f| t.add_event_listener_with_callback("mouseup", f),
+                Box::new(|t, f| t.remove_event_listener_with_callback("mouseup", f)),
+            ));
+        }
+
+        self.buttons.push(Button { element, events });
 
         Ok(())
     }
@@ -141,5 +171,5 @@ impl Toolbar {
 #[allow(dead_code)]
 pub struct Button {
     element: HtmlElement,
-    function: Closure<dyn Fn()>,
+    events: Vec<ElementEvent>,
 }
