@@ -6,7 +6,7 @@ pub struct Underline;
 
 impl Component for Underline {
     const FLAG: ComponentFlag = ComponentFlag::UNDERLINE;
-    const TITLE: &'static str = "U";
+    const TITLE: &'static str = "Underline";
 
     type Data = ();
 

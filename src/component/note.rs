@@ -14,7 +14,7 @@ pub struct Note;
 
 impl Component for Note {
     const FLAG: ComponentFlag = ComponentFlag::NOTE;
-    const TITLE: &'static str = "N";
+    const TITLE: &'static str = "Note";
 
     const ALLOWED_SIBLINGS: ComponentFlag = ComponentFlag::empty();
     const OVERWRITE_INVALID: bool = true;

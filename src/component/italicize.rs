@@ -6,7 +6,7 @@ pub struct Italicize;
 
 impl Component for Italicize {
     const FLAG: ComponentFlag = ComponentFlag::ITALICIZE;
-    const TITLE: &'static str = "I";
+    const TITLE: &'static str = "Italicize";
 
     type Data = ();
 

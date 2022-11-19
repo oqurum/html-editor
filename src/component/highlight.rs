@@ -10,7 +10,7 @@ pub struct Highlight;
 
 impl Component for Highlight {
     const FLAG: ComponentFlag = ComponentFlag::HIGHLIGHT;
-    const TITLE: &'static str = "H";
+    const TITLE: &'static str = "Highlight";
 
     type Data = HighlightTypes;
 

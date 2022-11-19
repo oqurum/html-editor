@@ -87,17 +87,12 @@ impl Toolbar {
             ignore_mouse_down.as_ref().unchecked_ref(),
         )?;
 
-        let style = element.style();
-
         self.mouse_down_listener = Some(ignore_mouse_down);
 
         self.create_button(Highlight, data.clone(), func.clone())?;
         self.create_button(Note, data, func.clone())?;
         // self.create_button(Underline, data.clone(), func.clone())?;
         // self.create_button(Italicize, data.clone(), func.clone())?;
-
-        // Style Toolbar
-        style.set_property("width", &format!("{}px", self.buttons.len() * 30))?;
 
         Ok(())
     }
