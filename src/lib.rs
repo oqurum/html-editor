@@ -4,6 +4,7 @@ pub mod component;
 mod gui;
 mod helper;
 mod listener;
+mod migration;
 mod node;
 mod selection;
 mod store;

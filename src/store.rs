@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 use web_sys::{HtmlElement, Text};
 
-use crate::{listener::{ListenerData, ListenerHandle, register_with_data}, ComponentNode, ListenerId, Result, component::{FlagsWithData, SingleFlagWithData, ComponentDataStore}};
+use crate::{listener::{ListenerData, ListenerHandle, register_with_data}, ComponentNode, ListenerId, Result, component::{FlagsWithData, SingleFlagWithData, ComponentDataStore}, migration::CURRENT_VERSION};
 
 pub fn load_and_register(
     container: HtmlElement,
@@ -17,6 +17,7 @@ pub fn load_and_register(
 
 pub fn save(state: &ListenerData) -> SaveState {
     SaveState {
+        version: CURRENT_VERSION,
         data: state.data.clone(),
         nodes: state
             .nodes
@@ -35,6 +36,7 @@ pub fn save(state: &ListenerData) -> SaveState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveState {
+    pub version: usize,
     pub(crate) data: Vec<ComponentDataStore>,
     pub(crate) nodes: Vec<SavedNode>,
 }
