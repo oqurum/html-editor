@@ -233,18 +233,7 @@ pub fn register_with_data(
             data: listener_data,
         }));
 
-        // Create the initial listener
-        let listener = Rc::downgrade(&listener_rc);
-        let function = Closure::wrap(Box::new(move |event: MouseEvent| {
-            handle_listener_mouseup(event, &listener_class, &listener).unwrap_throw();
-        }) as Box<dyn Fn(MouseEvent)>);
-
-        listener_rc.borrow_mut().functions.push(ElementEvent::link(
-            document().unchecked_into(),
-            function,
-            |t, f| t.add_event_listener_with_callback("mouseup", f),
-            Box::new(|t, f| t.remove_event_listener_with_callback("mouseup", f)),
-        ));
+        register_listener_events(&listener_rc, listener_class)?;
 
         listeners.push(listener_rc);
 
@@ -285,24 +274,45 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
             data: listener_data,
         }));
 
-        // Create the on click listener
-        let listener = Rc::downgrade(&listener_rc);
-        let listener_class2 = listener_class.clone();
-        let function: Closure<dyn FnMut(MouseEvent)> = Closure::new(move |event: MouseEvent| {
-            handle_listener_mouseclick(event, &listener_class2, &listener).unwrap_throw();
+        register_listener_events(&listener_rc, listener_class)?;
+
+        listeners.push(listener_rc);
+
+        Ok(ListenerHandle(listener_id))
+    })
+}
+
+fn register_listener_events(listener_rc: &Rc<RefCell<Listener>>, listener_class: String) -> Result<()> {
+    let is_mouse_down = Rc::new(RefCell::new(false));
+
+    // Create the mouse move listener
+    {
+        let listener = Rc::downgrade(listener_rc);
+        let is_mouse_down = is_mouse_down.clone();
+
+        let function: Closure<dyn FnMut(MouseEvent)> = Closure::new(move |_event: MouseEvent| {
+            if *is_mouse_down.borrow() {
+                display_toolbar(&listener).unwrap_throw();
+            }
         });
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
             document().unchecked_into(),
             function,
-            |t, f| t.add_event_listener_with_callback("click", f),
-            Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+            |t, f| t.add_event_listener_with_callback("mousemove", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("mousemove", f)),
         ));
+    }
 
-        // Create the initial listener
-        let listener = Rc::downgrade(&listener_rc);
-        let function = Closure::wrap(Box::new(move |event: MouseEvent| {
-            handle_listener_mouseup(event, &listener_class, &listener).unwrap_throw();
+    // Create the mouse up listener
+    {
+        let listener = Rc::downgrade(listener_rc);
+        let is_mouse_down = is_mouse_down.clone();
+
+        let function = Closure::wrap(Box::new(move |_event: MouseEvent| {
+            *is_mouse_down.borrow_mut() = false;
+
+            display_toolbar(&listener).unwrap_throw();
         }) as Box<dyn Fn(MouseEvent)>);
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
@@ -311,11 +321,42 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
             |t, f| t.add_event_listener_with_callback("mouseup", f),
             Box::new(|t, f| t.remove_event_listener_with_callback("mouseup", f)),
         ));
+    }
 
-        listeners.push(listener_rc);
+    // Create the mouse down listener
+    {
+        let listener_class = listener_class.clone();
 
-        Ok(ListenerHandle(listener_id))
-    })
+        let function = Closure::wrap(Box::new(move |event: MouseEvent| {
+            if parents_contains_class(event.target_unchecked_into(), &listener_class) {
+                *is_mouse_down.borrow_mut() = true;
+            }
+        }) as Box<dyn Fn(MouseEvent)>);
+
+        listener_rc.borrow_mut().functions.push(ElementEvent::link(
+            document().unchecked_into(),
+            function,
+            |t, f| t.add_event_listener_with_callback("mousedown", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("mousedown", f)),
+        ));
+    }
+
+    // Create the on click listener
+    {
+        let listener = Rc::downgrade(listener_rc);
+        let function: Closure<dyn FnMut(MouseEvent)> = Closure::new(move |event: MouseEvent| {
+            handle_listener_mouseclick(event, &listener_class, &listener).unwrap_throw();
+        });
+
+        listener_rc.borrow_mut().functions.push(ElementEvent::link(
+            document().unchecked_into(),
+            function,
+            |t, f| t.add_event_listener_with_callback("click", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+        ));
+    }
+
+    Ok(())
 }
 
 
@@ -378,15 +419,8 @@ fn handle_listener_mouseclick(
     Ok(())
 }
 
-fn handle_listener_mouseup(
-    event: MouseEvent,
-    listening_class: &str,
-    handler: &Weak<RefCell<Listener>>,
-) -> Result<()> {
-    if !parents_contains_class(event.target_unchecked_into(), listening_class) {
-        return Ok(());
-    }
 
+fn display_toolbar(handler: &Weak<RefCell<Listener>>) -> Result<()> {
     let handler = handler.upgrade().expect_throw("Upgrade Listener");
     let mut handler = handler.borrow_mut();
 
