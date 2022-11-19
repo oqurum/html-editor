@@ -48,7 +48,13 @@ impl NodeContainer {
         self.nodes.iter().any(|text| {
             page_data
                 .get_text_container(text)
-                .filter(|v| v.has_flag(flag))
+                .filter(|v| {
+                    if let Some(wrapper) = v.text.iter().find(|v| &v.node == text) {
+                        wrapper.has_flag(flag)
+                    } else {
+                        false
+                    }
+                })
                 .is_some()
         })
     }
