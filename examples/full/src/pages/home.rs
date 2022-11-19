@@ -31,7 +31,7 @@ pub fn home() -> Html {
                 node.cast::<HtmlElement>().unwrap_throw(),
                 Rc::new(RefCell::new(move |id: ListenerId| {
                     let save = id.try_save();
-                    log::debug!("{:#?}", save);
+                    // log::debug!("{:#?}", save);
                     *last_save.borrow_mut() = save;
 
                     debug.set(format!("{:#?}", id.try_get().unwrap().borrow().data.borrow()));
@@ -82,7 +82,7 @@ pub fn home() -> Html {
                         v.clone(),
                         Rc::new(RefCell::new(move |id: ListenerId| {
                             let save = id.try_save();
-                            log::debug!("{:#?}", save);
+                            // log::debug!("{:#?}", save);
                             *last_save2.borrow_mut() = save;
 
                             debug.set(format!("{:#?}", id.try_get().unwrap().borrow().data.borrow()));
