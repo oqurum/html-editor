@@ -12,7 +12,7 @@ use web_sys::{HtmlElement, MouseEvent, Text, Element, Node};
 
 use crate::{
     helper::{parents_contains_class, TargetCast},
-    node::{TextContainer, TextContainerRefMut},
+    node::{TextContainer, FoundWrappedTextRefMut},
     store,
     toolbar::Toolbar,
     Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection, util::ElementEvent, WrappedText,
@@ -145,12 +145,12 @@ impl ListenerData {
         self.nodes.iter().find_map(|v| v.get_wrapped_text(node))
     }
 
-    pub fn find_text_container_mut(&mut self, node: &Text) -> Option<TextContainerRefMut<'_>> {
+    pub fn get_text_container_mut(&mut self, node: &Text) -> Option<FoundWrappedTextRefMut<'_>> {
         self.nodes.iter_mut().find_map(|v| v.find_node_return_mut_ref(node))
     }
 
     pub fn update_container(&mut self, text: &Text, flag: FlagsWithData) -> Result<()> {
-        if let Some(mut comp) = self.find_text_container_mut(text) {
+        if let Some(mut comp) = self.get_text_container_mut(text) {
             comp.add_flag_to(flag)?;
         } else {
             panic!("unable to find Text Container");
@@ -160,7 +160,7 @@ impl ListenerData {
     }
 
     pub fn remove_component_node_flag(&mut self, node: &Text, flag: &FlagsWithData) -> Result<()> {
-        if let Some(mut comp) = self.find_text_container_mut(node) {
+        if let Some(mut comp) = self.get_text_container_mut(node) {
             comp.remove_flag_from(flag)?;
         }
 

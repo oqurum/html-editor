@@ -202,7 +202,7 @@ impl NodeContainer {
         let mut page_data = page_data.borrow_mut();
 
         // If component node already exists.
-        let mut comp_node = page_data.find_text_container_mut(&text).unwrap_throw();
+        let mut comp_node = page_data.get_text_container_mut(&text).unwrap_throw();
 
         log::debug!("Node cached");
 

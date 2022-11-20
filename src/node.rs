@@ -4,6 +4,10 @@ use web_sys::{HtmlElement, Node, Text};
 
 use crate::{Result, component::FlagsWithData, ComponentFlag};
 
+
+/// Contains the Text Node we can split apart into smaller ones.
+///
+/// We use this struct to better show that if there are multiple items in the vec that means we have split it apart.
 #[derive(Debug, Clone)]
 pub struct TextContainer {
     /// The non-split Text `Node` or split `Node`s
@@ -57,10 +61,10 @@ impl TextContainer {
         self.text.iter_mut().find(|v| &v.node == node)
     }
 
-    pub fn find_node_return_mut_ref(&mut self, node: &Text) -> Option<TextContainerRefMut<'_>> {
+    pub fn find_node_return_mut_ref(&mut self, node: &Text) -> Option<FoundWrappedTextRefMut<'_>> {
         let node_index = self.text.iter().position(|v| &v.node == node)?;
 
-        Some(TextContainerRefMut {
+        Some(FoundWrappedTextRefMut {
             container: self,
             node_index,
         })
@@ -144,12 +148,13 @@ impl Drop for TextContainer {
     }
 }
 
-pub struct TextContainerRefMut<'a> {
+/// Simple struct for finding a `WrappedText` while also allowing for container access if needed.
+pub struct FoundWrappedTextRefMut<'a> {
     container: &'a mut TextContainer,
     node_index: usize,
 }
 
-impl<'a> TextContainerRefMut<'a> {
+impl<'a> FoundWrappedTextRefMut<'a> {
     pub fn get_text(&mut self) -> &mut WrappedText {
         &mut self.container.text[self.node_index]
     }
@@ -185,7 +190,7 @@ impl<'a> TextContainerRefMut<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for TextContainerRefMut<'a> {
+impl<'a> std::ops::Deref for FoundWrappedTextRefMut<'a> {
     type Target = TextContainer;
 
     fn deref(&self) -> &Self::Target {
@@ -193,7 +198,7 @@ impl<'a> std::ops::Deref for TextContainerRefMut<'a> {
     }
 }
 
-impl<'a> std::ops::DerefMut for TextContainerRefMut<'a> {
+impl<'a> std::ops::DerefMut for FoundWrappedTextRefMut<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.container
     }
@@ -202,7 +207,7 @@ impl<'a> std::ops::DerefMut for TextContainerRefMut<'a> {
 
 
 
-/// Nodes which have display wrappers for the text(?) components
+/// Contains the Text Node which can be changed with certain flags.
 #[derive(Debug, Clone)]
 pub struct WrappedText {
     /// Span container around the text node.
