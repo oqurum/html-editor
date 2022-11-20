@@ -4,7 +4,10 @@ use gloo_utils::window;
 use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{Range, Selection, Text};
 
-use crate::{node::get_all_text_nodes_in_container, Result, SharedListenerData, Component, component::FlagsWithData, ComponentFlag};
+use crate::{
+    component::FlagsWithData, node::get_all_text_nodes_in_container, Component, ComponentFlag,
+    Result, SharedListenerData,
+};
 
 pub struct NodeContainer {
     pub(crate) data: SharedListenerData,
@@ -20,7 +23,8 @@ impl NodeContainer {
         let page_data = self.data.upgrade().expect_throw("data upgrade");
         let page_data = page_data.borrow();
 
-        self.nodes.iter()
+        self.nodes
+            .iter()
             .filter_map(|text| {
                 let cont = page_data.get_text_container_for_node(text)?;
                 Some(cont.get_all_data_ids())
@@ -54,7 +58,8 @@ impl NodeContainer {
     }
 
     pub fn insert_selection<D: Component>(&mut self, data: Option<u32>) -> Result<bool> {
-        let flag = FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
+        let flag =
+            FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
 
         if self.does_selected_intersect(D::ALLOWED_SIBLINGS.complement()) {
             log::error!("Not Allowed");
@@ -78,7 +83,8 @@ impl NodeContainer {
     }
 
     pub fn remove_selection<D: Component>(&mut self, data: Option<u32>) -> Result<bool> {
-        let flag = FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
+        let flag =
+            FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
 
         log::debug!("unset component");
 
@@ -251,11 +257,7 @@ pub fn get_nodes_in_selection(
     })
 }
 
-
-pub fn create_container(
-    nodes: Vec<Text>,
-    data: SharedListenerData,
-) -> Result<NodeContainer> {
+pub fn create_container(nodes: Vec<Text>, data: SharedListenerData) -> Result<NodeContainer> {
     Ok(NodeContainer {
         data,
         nodes,

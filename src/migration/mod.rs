@@ -1,5 +1,3 @@
-
-
 pub(crate) static CURRENT_VERSION: usize = 0;
 
 // TODO: Handle different versions.

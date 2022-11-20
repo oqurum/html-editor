@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use num_enum::{TryFromPrimitive, IntoPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::{ComponentFlag, Result};
 

@@ -1,8 +1,8 @@
-use std::{borrow::Cow, rc::Rc, cell::RefCell};
+use std::{borrow::Cow, cell::RefCell, rc::Rc};
 
 use bitflags::bitflags;
 use num_enum::TryFromPrimitive;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 mod highlight;
 mod italicize;
@@ -48,11 +48,16 @@ pub trait Component {
     }
 
     fn get_default_data_id() -> u32 {
-        <Self::Data as ComponentData>::default().map(|v| v.id()).unwrap_or_default()
+        <Self::Data as ComponentData>::default()
+            .map(|v| v.id())
+            .unwrap_or_default()
     }
 }
 
-pub trait ComponentData where Self: Sized {
+pub trait ComponentData
+where
+    Self: Sized,
+{
     fn get_css(&self) -> Option<Cow<'static, str>> {
         None
     }
@@ -73,7 +78,6 @@ impl ComponentData for () {
     fn from_id(_value: u32) -> Self {}
 }
 
-
 /// `ComponentFlag` is used to determine the type of component the Store is for.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentDataStore(pub(crate) ComponentFlag, pub(crate) String);
@@ -92,7 +96,6 @@ impl ComponentDataStore {
     }
 }
 
-
 #[derive(Clone)]
 pub struct Context {
     pub nodes: Rc<RefCell<NodeContainer>>,
@@ -104,19 +107,43 @@ impl Context {
     }
 
     pub fn store_data<D: Component, S: Serialize>(&self, value: &S) -> u32 {
-        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow_mut().store_data(D::FLAG, value)
+        self.nodes
+            .borrow()
+            .data
+            .upgrade()
+            .expect_throw("data upgrade")
+            .borrow_mut()
+            .store_data(D::FLAG, value)
     }
 
     pub fn get_data<D: Component>(&self, index: u32) -> ComponentDataStore {
-        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow().get_data(D::FLAG, index)
+        self.nodes
+            .borrow()
+            .data
+            .upgrade()
+            .expect_throw("data upgrade")
+            .borrow()
+            .get_data(D::FLAG, index)
     }
 
     pub fn update_data<D: Component, S: Serialize>(&self, index: u32, value: &S) {
-        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow_mut().update_data(D::FLAG, index, value);
+        self.nodes
+            .borrow()
+            .data
+            .upgrade()
+            .expect_throw("data upgrade")
+            .borrow_mut()
+            .update_data(D::FLAG, index, value);
     }
 
     pub fn remove_data<D: Component>(&self, index: u32) {
-        self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow_mut().remove_data(D::FLAG, index);
+        self.nodes
+            .borrow()
+            .data
+            .upgrade()
+            .expect_throw("data upgrade")
+            .borrow_mut()
+            .remove_data(D::FLAG, index);
     }
 
     pub fn get_selection_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
@@ -132,7 +159,14 @@ impl Context {
     }
 
     pub fn save(&self) {
-        let id = self.nodes.borrow().data.upgrade().expect_throw("data upgrade").borrow().listener_id;
+        let id = self
+            .nodes
+            .borrow()
+            .data
+            .upgrade()
+            .expect_throw("data upgrade")
+            .borrow()
+            .listener_id;
 
         id.try_get().unwrap().borrow().on_event.borrow()(id);
     }
@@ -159,8 +193,11 @@ impl ComponentFlag {
     pub fn separate_bits(self) -> Vec<Self> {
         let mut flags = Vec::new();
 
-        COMPONENT_FLAGS.into_iter()
-        .for_each(|v| if self.contains(v) { flags.push(v); });
+        COMPONENT_FLAGS.into_iter().for_each(|v| {
+            if self.contains(v) {
+                flags.push(v);
+            }
+        });
 
         flags
     }
@@ -168,9 +205,9 @@ impl ComponentFlag {
     // TODO: Replace with get_data() but we're using Self: Sized for the trait
     pub fn get_data_class(self, value: u32) -> Option<Cow<'static, str>> {
         match self {
-            Self::HIGHLIGHT => {
-                HighlightTypes::try_from_primitive(value as u8).unwrap().get_css()
-            }
+            Self::HIGHLIGHT => HighlightTypes::try_from_primitive(value as u8)
+                .unwrap()
+                .get_css(),
 
             _ => None,
         }
@@ -217,7 +254,7 @@ impl FlagsWithData {
     pub fn new_with_data(flag: ComponentFlag, data: u32) -> Self {
         Self {
             flag,
-            data: vec![ (flag, data) ],
+            data: vec![(flag, data)],
         }
     }
 
@@ -297,24 +334,22 @@ impl FlagsWithData {
     }
 
     pub fn into_singles_vec(&self) -> Vec<SingleFlagWithData> {
-        COMPONENT_FLAGS.into_iter()
-        .filter_map(|v| {
-            if self.flag.contains(v) {
-                let data = self.data.iter()
-                    .find_map(|(flag, data)| {
-                        if &v == flag {
-                            Some(*data)
-                        } else {
-                            None
-                        }
-                    }).unwrap_or_default();
+        COMPONENT_FLAGS
+            .into_iter()
+            .filter_map(|v| {
+                if self.flag.contains(v) {
+                    let data = self
+                        .data
+                        .iter()
+                        .find_map(|(flag, data)| if &v == flag { Some(*data) } else { None })
+                        .unwrap_or_default();
 
-                Some(SingleFlagWithData::new(v, data))
-            } else {
-                None
-            }
-        })
-        .collect()
+                    Some(SingleFlagWithData::new(v, data))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn from_singles(value: &[SingleFlagWithData]) -> Self {
@@ -331,7 +366,6 @@ impl FlagsWithData {
     }
 }
 
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SingleFlagWithData(u64);
@@ -345,7 +379,6 @@ impl SingleFlagWithData {
     pub fn empty() -> Self {
         Self(0)
     }
-
 
     pub fn flag(self) -> ComponentFlag {
         ComponentFlag::from_bits_truncate((self.0 >> 32) as u32)

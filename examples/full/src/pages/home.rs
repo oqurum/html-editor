@@ -1,9 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
-use editor::{ListenerId, SaveState, load_and_register};
+use editor::{load_and_register, ListenerId, SaveState};
 use wasm_bindgen::UnwrapThrowExt;
-use web_sys::{HtmlElement, window};
-use yew::{function_component, functional::use_node_ref, html, use_state_eq, Callback, use_mut_ref};
+use web_sys::{window, HtmlElement};
+use yew::{
+    function_component, functional::use_node_ref, html, use_mut_ref, use_state_eq, Callback,
+};
 
 #[function_component(Home)]
 pub fn home() -> Html {
@@ -34,7 +36,10 @@ pub fn home() -> Html {
                     // log::debug!("{:#?}", save);
                     *last_save.borrow_mut() = save;
 
-                    debug.set(format!("{:#?}", id.try_get().unwrap().borrow().data.borrow()));
+                    debug.set(format!(
+                        "{:#?}",
+                        id.try_get().unwrap().borrow().data.borrow()
+                    ));
                 })) as Rc<RefCell<dyn Fn(ListenerId)>>,
             )
             .expect_throw("Registering");
@@ -51,10 +56,12 @@ pub fn home() -> Html {
     let on_click_save = {
         let last_save = last_save.clone();
 
-        Callback::from(move|_| {
+        Callback::from(move |_| {
             if let Some(state) = last_save.borrow().as_ref() {
                 let store = window().unwrap().local_storage().unwrap().unwrap();
-                store.set_item("home", &serde_json::to_string(state).unwrap()).unwrap();
+                store
+                    .set_item("home", &serde_json::to_string(state).unwrap())
+                    .unwrap();
             }
         })
     };
@@ -65,13 +72,15 @@ pub fn home() -> Html {
         let last_save = last_save.clone();
         let listener = listener.clone();
 
-        Callback::from(move|_| {
+        Callback::from(move |_| {
             // TODO: For some reason it converts the fn to FnOnce if these clones aren't here.
             let debug = debug.clone();
 
             let store = window().unwrap().local_storage().unwrap().unwrap();
 
-            match serde_json::from_str::<Option<SaveState>>(&store.get_item("home").unwrap().unwrap()) {
+            match serde_json::from_str::<Option<SaveState>>(
+                &store.get_item("home").unwrap().unwrap(),
+            ) {
                 Ok(Some(v)) => {
                     // Unset the last listener to reset the HTML
                     std::mem::drop(listener.take());
@@ -85,7 +94,10 @@ pub fn home() -> Html {
                             // log::debug!("{:#?}", save);
                             *last_save2.borrow_mut() = save;
 
-                            debug.set(format!("{:#?}", id.try_get().unwrap().borrow().data.borrow()));
+                            debug.set(format!(
+                                "{:#?}",
+                                id.try_get().unwrap().borrow().data.borrow()
+                            ));
                         })) as Rc<RefCell<dyn Fn(ListenerId)>>,
                     ) {
                         Ok(v) => v,
@@ -97,7 +109,7 @@ pub fn home() -> Html {
 
                     *listener.borrow_mut() = Some(handle);
                     *last_save.borrow_mut() = Some(v);
-                },
+                }
                 Ok(None) => (),
                 Err(e) => log::error!("Loading {e:?}"),
             }
@@ -105,14 +117,13 @@ pub fn home() -> Html {
     };
 
     let on_click_reset = {
-        Callback::from(move|_| {
+        Callback::from(move |_| {
             *last_save.borrow_mut() = None;
             *listener.borrow_mut() = None;
 
             register();
         })
     };
-
 
     html! {
         <>

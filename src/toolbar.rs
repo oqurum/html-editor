@@ -1,14 +1,16 @@
 use std::{cell::RefCell, rc::Rc};
 
-use chrono::{Utc, Duration};
+use chrono::{Duration, Utc};
 use gloo_utils::document;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent};
 
 use crate::{
-    component::{Component, Highlight, Note, Context},
+    component::{Component, Context, Highlight, Note},
     listener::SharedListenerData,
-    selection, ListenerId, Result, util::ElementEvent,
+    selection,
+    util::ElementEvent,
+    ListenerId, Result,
 };
 
 pub struct Toolbar {
@@ -45,21 +47,9 @@ impl Toolbar {
 
         let style = self.popup.style();
 
-        style.set_property(
-            "left",
-            &format!(
-                "{}px",
-                x + selected_width / 2.0,
-            ),
-        )?;
+        style.set_property("left", &format!("{}px", x + selected_width / 2.0,))?;
 
-        style.set_property(
-            "top",
-            &format!(
-                "{}px",
-                y - HEIGHT - 3.0,
-            )
-        )?;
+        style.set_property("top", &format!("{}px", y - HEIGHT - 3.0,))?;
 
         document().body().unwrap_throw().append_child(&self.popup)?;
 
@@ -113,7 +103,6 @@ impl Toolbar {
 
         self.popup.append_child(&element)?;
 
-
         let last_clicked = Rc::new(RefCell::new(Utc::now()));
 
         let mut events = Vec::new();
@@ -137,7 +126,9 @@ impl Toolbar {
         // Create the mouse up listener
         {
             let function = Closure::wrap(Box::new(move || {
-                if Utc::now().signed_duration_since(*last_clicked.borrow()) >= Duration::milliseconds(500) {
+                if Utc::now().signed_duration_since(*last_clicked.borrow())
+                    >= Duration::milliseconds(500)
+                {
                     // TODO
                 } else if let Some(selection) = document()
                     .get_selection()
@@ -145,7 +136,10 @@ impl Toolbar {
                     .filter(|v| !v.is_collapsed())
                 {
                     let context = Context {
-                        nodes: Rc::new(RefCell::new(selection::get_nodes_in_selection(selection, data.clone()).unwrap_throw()))
+                        nodes: Rc::new(RefCell::new(
+                            selection::get_nodes_in_selection(selection, data.clone())
+                                .unwrap_throw(),
+                        )),
                     };
 
                     component.on_click_button(&context).unwrap_throw();

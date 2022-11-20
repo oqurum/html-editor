@@ -1,8 +1,6 @@
 use js_sys::Function;
-use wasm_bindgen::{JsValue, JsCast, UnwrapThrowExt};
+use wasm_bindgen::{JsCast, JsValue, UnwrapThrowExt};
 use web_sys::EventTarget;
-
-
 
 type Destructor = Box<dyn FnOnce(&EventTarget, &Function) -> std::result::Result<(), JsValue>>;
 

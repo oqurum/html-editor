@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
 use gloo_utils::{body, document};
-use wasm_bindgen::{JsValue, JsCast, prelude::Closure, UnwrapThrowExt};
-use web_sys::{HtmlElement, HtmlTextAreaElement, Element};
+use wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt};
+use web_sys::{Element, HtmlElement, HtmlTextAreaElement};
 
 use crate::{ComponentFlag, Result};
 
@@ -44,11 +44,9 @@ impl Component for Note {
     }
 }
 
-
 thread_local! {
     static DISPLAYING: RefCell<Option<Popup>> = RefCell::default();
 }
-
 
 #[allow(dead_code)]
 struct Popup {
@@ -119,7 +117,6 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
         })
     };
 
-
     let content = document().create_element("div")?;
     content.class_list().add_1("popup")?;
 
@@ -146,7 +143,8 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
         body.class_list().add_1("popup-body")?;
         inner.append_child(&body)?;
 
-        let text_area: HtmlTextAreaElement = document().create_element("textarea")?.unchecked_into();
+        let text_area: HtmlTextAreaElement =
+            document().create_element("textarea")?.unchecked_into();
         body.append_child(&text_area)?;
 
         if let Some(editing_id) = editing_id {

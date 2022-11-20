@@ -8,14 +8,16 @@ use gloo_utils::document;
 use lazy_static::lazy_static;
 use serde::Serialize;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
-use web_sys::{HtmlElement, MouseEvent, Text, Element, Node};
+use web_sys::{Element, HtmlElement, MouseEvent, Node, Text};
 
 use crate::{
+    component::{ComponentDataStore, Context, FlagsWithData},
     helper::{parents_contains_class, TargetCast},
-    node::{TextContainer, FoundWrappedTextRefMut},
-    store,
+    node::{FoundWrappedTextRefMut, TextContainer},
+    selection, store,
     toolbar::Toolbar,
-    Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection, util::ElementEvent, WrappedText,
+    util::ElementEvent,
+    Component, ComponentFlag, Result, WrappedText,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
@@ -146,7 +148,9 @@ impl ListenerData {
     }
 
     pub fn get_text_container_mut(&mut self, node: &Text) -> Option<FoundWrappedTextRefMut<'_>> {
-        self.nodes.iter_mut().find_map(|v| v.find_node_return_mut_ref(node))
+        self.nodes
+            .iter_mut()
+            .find_map(|v| v.find_node_return_mut_ref(node))
     }
 
     pub fn update_container(&mut self, text: &Text, flag: FlagsWithData) -> Result<()> {
@@ -167,7 +171,6 @@ impl ListenerData {
         Ok(())
     }
 }
-
 
 pub struct Listener {
     pub listener_id: ListenerId,
@@ -190,12 +193,19 @@ impl Drop for ListenerHandle {
         LISTENERS.with(|listeners| {
             let mut listeners = listeners.borrow_mut();
 
-            if let Some(index) = listeners.iter().position(|v| v.borrow().listener_id == self.0) {
+            if let Some(index) = listeners
+                .iter()
+                .position(|v| v.borrow().listener_id == self.0)
+            {
                 let listener = listeners.remove(index);
 
                 let listener_class = create_listener_class(*self.0);
 
-                let _ = listener.borrow().element.class_list().remove_1(&listener_class);
+                let _ = listener
+                    .borrow()
+                    .element
+                    .class_list()
+                    .remove_1(&listener_class);
 
                 log::debug!("Dropping Handle {:?}", self.0);
             }
@@ -247,7 +257,10 @@ pub fn register_with_data(
 }
 
 /// Should be called AFTER page has fully loaded and finished any Element changes.
-pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>) -> Result<ListenerHandle> {
+pub fn register(
+    element: HtmlElement,
+    on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
+) -> Result<ListenerHandle> {
     LISTENERS.with(|listeners| -> Result<ListenerHandle> {
         let mut listeners = listeners.borrow_mut();
 
@@ -287,7 +300,10 @@ pub fn register(element: HtmlElement, on_event: Rc<RefCell<dyn Fn(ListenerId)>>)
     })
 }
 
-fn register_listener_events(listener_rc: &Rc<RefCell<Listener>>, listener_class: String) -> Result<()> {
+fn register_listener_events(
+    listener_rc: &Rc<RefCell<Listener>>,
+    listener_class: String,
+) -> Result<()> {
     let is_mouse_down = Rc::new(RefCell::new(false));
 
     // Create the mouse move listener
@@ -364,9 +380,6 @@ fn register_listener_events(listener_rc: &Rc<RefCell<Listener>>, listener_class:
     Ok(())
 }
 
-
-
-
 fn handle_listener_mouseclick(
     event: MouseEvent,
     listening_class: &str,
@@ -405,15 +418,23 @@ fn handle_listener_mouseclick(
         }
 
         let ctx = Context {
-            nodes: Rc::new(RefCell::new(selection::create_container(text_nodes, Rc::downgrade(&handle.data)).unwrap_throw()))
+            nodes: Rc::new(RefCell::new(
+                selection::create_container(text_nodes, Rc::downgrade(&handle.data)).unwrap_throw(),
+            )),
         };
 
         // TODO: Improve
         for flag in flags.separate_bits() {
             match flag {
-                ComponentFlag::ITALICIZE => crate::component::Italicize.on_click(&ctx).unwrap_throw(),
-                ComponentFlag::HIGHLIGHT => crate::component::Highlight.on_click(&ctx).unwrap_throw(),
-                ComponentFlag::UNDERLINE => crate::component::Underline.on_click(&ctx).unwrap_throw(),
+                ComponentFlag::ITALICIZE => {
+                    crate::component::Italicize.on_click(&ctx).unwrap_throw()
+                }
+                ComponentFlag::HIGHLIGHT => {
+                    crate::component::Highlight.on_click(&ctx).unwrap_throw()
+                }
+                ComponentFlag::UNDERLINE => {
+                    crate::component::Underline.on_click(&ctx).unwrap_throw()
+                }
                 ComponentFlag::NOTE => crate::component::Note.on_click(&ctx).unwrap_throw(),
 
                 _ => unreachable!(),
@@ -423,7 +444,6 @@ fn handle_listener_mouseclick(
 
     Ok(())
 }
-
 
 fn display_toolbar(handler: &Weak<RefCell<Listener>>) -> Result<()> {
     let handler = handler.upgrade().expect_throw("Upgrade Listener");

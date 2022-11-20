@@ -3,7 +3,12 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 use web_sys::{HtmlElement, Text};
 
-use crate::{listener::{ListenerData, ListenerHandle, register_with_data}, WrappedText, ListenerId, Result, component::{FlagsWithData, SingleFlagWithData, ComponentDataStore}, migration::CURRENT_VERSION};
+use crate::{
+    component::{ComponentDataStore, FlagsWithData, SingleFlagWithData},
+    listener::{register_with_data, ListenerData, ListenerHandle},
+    migration::CURRENT_VERSION,
+    ListenerId, Result, WrappedText,
+};
 
 pub fn load_and_register(
     container: HtmlElement,
@@ -57,17 +62,24 @@ impl SaveState {
 
             for text_split in saved_node.flags.iter() {
                 if text_split.offset == 0 {
-                    list_node.set_flag_for_node(&curr_node, FlagsWithData::from_singles(&text_split.flags))?;
+                    list_node.set_flag_for_node(
+                        &curr_node,
+                        FlagsWithData::from_singles(&text_split.flags),
+                    )?;
                 } else {
                     let node = list_node.split_node(&curr_node, text_split.offset - text_offset)?;
-                    list_node.set_flag_for_node(&node, FlagsWithData::from_singles(&text_split.flags))?;
+                    list_node
+                        .set_flag_for_node(&node, FlagsWithData::from_singles(&text_split.flags))?;
                     curr_node = node;
                 }
 
                 text_offset += text_split.offset;
             }
 
-            list_node.add_flag_to_node(&curr_node, FlagsWithData::from_singles(&saved_node.flags[0].flags))?;
+            list_node.add_flag_to_node(
+                &curr_node,
+                FlagsWithData::from_singles(&saved_node.flags[0].flags),
+            )?;
         }
 
         Ok(listener)
