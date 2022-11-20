@@ -15,7 +15,7 @@ use crate::{
     node::{TextContainer, TextContainerRefMut},
     store,
     toolbar::Toolbar,
-    Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection, util::ElementEvent,
+    Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection, util::ElementEvent, WrappedText,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
@@ -139,6 +139,10 @@ impl ListenerData {
 
     pub fn get_text_container_for_node(&self, node: &Text) -> Option<&TextContainer> {
         self.nodes.iter().find(|v| v.contains_node(node))
+    }
+
+    pub fn get_text_wrapper(&self, node: &Text) -> Option<&WrappedText> {
+        self.nodes.iter().find_map(|v| v.get_wrapped_text(node))
     }
 
     pub fn find_text_container_mut(&mut self, node: &Text) -> Option<TextContainerRefMut<'_>> {
