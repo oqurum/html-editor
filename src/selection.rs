@@ -22,7 +22,7 @@ impl NodeContainer {
 
         self.nodes.iter()
             .filter_map(|text| {
-                let cont = page_data.get_text_container(text)?;
+                let cont = page_data.get_text_container_for_node(text)?;
                 Some(cont.get_all_data_ids())
             })
             .flatten()
@@ -35,7 +35,7 @@ impl NodeContainer {
 
         self.nodes.iter().any(|text| {
             page_data
-                .get_text_container(text)
+                .get_text_container_for_node(text)
                 .filter(|v| v.intersects_flag(flag))
                 .is_some()
         })
@@ -47,7 +47,7 @@ impl NodeContainer {
 
         self.nodes.iter().any(|text| {
             page_data
-                .get_text_container(text)
+                .get_text_container_for_node(text)
                 .filter(|v| {
                     if let Some(wrapper) = v.text.iter().find(|v| &v.node == text) {
                         wrapper.has_flag(flag)
@@ -208,7 +208,7 @@ impl NodeContainer {
         let mut page_data = page_data.borrow_mut();
 
         // If component node already exists.
-        let comp_node = page_data.get_text_container_mut(&text).unwrap_throw();
+        let mut comp_node = page_data.find_text_container_mut(&text).unwrap_throw();
 
         log::debug!("Node cached");
 

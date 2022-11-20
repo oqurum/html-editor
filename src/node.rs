@@ -7,13 +7,13 @@ use crate::{Result, component::FlagsWithData, ComponentFlag};
 #[derive(Debug, Clone)]
 pub struct TextContainer {
     /// The non-split Text `Node` or split `Node`s
-    pub(crate) text: Vec<ComponentNode>,
+    pub(crate) text: Vec<WrappedText>,
 }
 
 impl TextContainer {
     pub fn new(text: Text) -> Result<Self> {
         Ok(Self {
-            text: vec![ComponentNode::wrap(text, 0, FlagsWithData::empty())?],
+            text: vec![WrappedText::wrap(text, 0, FlagsWithData::empty())?],
         })
     }
 
@@ -49,11 +49,24 @@ impl TextContainer {
         self.text.iter().any(|v| &v.node == node)
     }
 
-    pub fn get_node_mut(&mut self, node: &Text) -> Option<&mut ComponentNode> {
+    pub fn get_wrapped_text(&self, node: &Text) -> Option<&WrappedText> {
+        self.text.iter().find(|v| &v.node == node)
+    }
+
+    pub fn get_wrapped_text_mut(&mut self, node: &Text) -> Option<&mut WrappedText> {
         self.text.iter_mut().find(|v| &v.node == node)
     }
 
-    pub fn add_flag_to(&mut self, node: &Text, flag: FlagsWithData) -> Result<()> {
+    pub fn find_node_return_mut_ref(&mut self, node: &Text) -> Option<TextContainerRefMut<'_>> {
+        let node_index = self.text.iter().position(|v| &v.node == node)?;
+
+        Some(TextContainerRefMut {
+            container: self,
+            node_index,
+        })
+    }
+
+    pub fn add_flag_to_node(&mut self, node: &Text, flag: FlagsWithData) -> Result<()> {
         if let Some((index, comp)) = self
             .text
             .iter_mut()
@@ -68,7 +81,7 @@ impl TextContainer {
         Ok(())
     }
 
-    pub fn set_flag_for(&mut self, node: &Text, flag: FlagsWithData) -> Result<()> {
+    pub fn set_flag_for_node(&mut self, node: &Text, flag: FlagsWithData) -> Result<()> {
         if let Some((index, comp)) = self
             .text
             .iter_mut()
@@ -83,7 +96,7 @@ impl TextContainer {
         Ok(())
     }
 
-    pub fn remove_flag_from(&mut self, node: &Text, flag: &FlagsWithData) -> Result<()> {
+    pub fn remove_flag_from_node(&mut self, node: &Text, flag: &FlagsWithData) -> Result<()> {
         if let Some((index, comp)) = self
             .text
             .iter_mut()
@@ -131,9 +144,67 @@ impl Drop for TextContainer {
     }
 }
 
+pub struct TextContainerRefMut<'a> {
+    container: &'a mut TextContainer,
+    node_index: usize,
+}
+
+impl<'a> TextContainerRefMut<'a> {
+    pub fn get_text(&mut self) -> &mut WrappedText {
+        &mut self.container.text[self.node_index]
+    }
+
+    pub fn add_flag_to(&mut self, flag: FlagsWithData) -> Result<()> {
+        let comp = &mut self.container.text[self.node_index];
+
+        comp.add_flag(flag)?;
+
+        try_join_component_into_surroundings(self.node_index, &mut self.container.text)?;
+
+        Ok(())
+    }
+
+    pub fn set_flag_for(&mut self, flag: FlagsWithData) -> Result<()> {
+        let comp = &mut self.container.text[self.node_index];
+
+        comp.set_flag(flag)?;
+
+        try_join_component_into_surroundings(self.node_index, &mut self.container.text)?;
+
+        Ok(())
+    }
+
+    pub fn remove_flag_from(&mut self, flag: &FlagsWithData) -> Result<()> {
+        let comp = &mut self.container.text[self.node_index];
+
+        comp.remove_flag(flag)?;
+
+        try_join_component_into_surroundings(self.node_index, &mut self.container.text)?;
+
+        Ok(())
+    }
+}
+
+impl<'a> std::ops::Deref for TextContainerRefMut<'a> {
+    type Target = TextContainer;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.container
+    }
+}
+
+impl<'a> std::ops::DerefMut for TextContainerRefMut<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.container
+    }
+}
+
+
+
+
 /// Nodes which have display wrappers for the text(?) components
 #[derive(Debug, Clone)]
-pub struct ComponentNode {
+pub struct WrappedText {
     /// Span container around the text node.
     container: HtmlElement,
 
@@ -145,7 +216,7 @@ pub struct ComponentNode {
     pub flag: FlagsWithData,
 }
 
-impl ComponentNode {
+impl WrappedText {
     pub fn wrap(text: Text, offset: u32, flag: FlagsWithData) -> Result<Self> {
         Ok(Self {
             container: create_container(&text, flag.clone())?,
@@ -266,7 +337,7 @@ fn create_container(text_node: &Text, flag: FlagsWithData) -> Result<HtmlElement
 /// Updates the
 pub(crate) fn try_join_component_into_surroundings(
     mut index: usize,
-    nodes: &mut Vec<ComponentNode>,
+    nodes: &mut Vec<WrappedText>,
 ) -> Result<()> {
     // Compare current and previous component.
     if index != 0 && nodes[index].flag == nodes[index - 1].flag {

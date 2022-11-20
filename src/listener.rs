@@ -12,7 +12,7 @@ use web_sys::{HtmlElement, MouseEvent, Text, Element, Node};
 
 use crate::{
     helper::{parents_contains_class, TargetCast},
-    node::TextContainer,
+    node::{TextContainer, TextContainerRefMut},
     store,
     toolbar::Toolbar,
     Result, component::{FlagsWithData, ComponentDataStore, Context}, ComponentFlag, Component, selection, util::ElementEvent,
@@ -136,17 +136,18 @@ impl ListenerData {
     }
 
     // TODO: Optimize. We're iterating through two arrays.
-    pub fn get_text_container(&self, node: &Text) -> Option<&TextContainer> {
+
+    pub fn get_text_container_for_node(&self, node: &Text) -> Option<&TextContainer> {
         self.nodes.iter().find(|v| v.contains_node(node))
     }
 
-    pub fn get_text_container_mut(&mut self, node: &Text) -> Option<&mut TextContainer> {
-        self.nodes.iter_mut().find(|v| v.contains_node(node))
+    pub fn find_text_container_mut(&mut self, node: &Text) -> Option<TextContainerRefMut<'_>> {
+        self.nodes.iter_mut().find_map(|v| v.find_node_return_mut_ref(node))
     }
 
     pub fn update_container(&mut self, text: &Text, flag: FlagsWithData) -> Result<()> {
-        if let Some(comp) = self.get_text_container_mut(text) {
-            comp.add_flag_to(text, flag)?;
+        if let Some(mut comp) = self.find_text_container_mut(text) {
+            comp.add_flag_to(flag)?;
         } else {
             panic!("unable to find Text Container");
         }
@@ -155,8 +156,8 @@ impl ListenerData {
     }
 
     pub fn remove_component_node_flag(&mut self, node: &Text, flag: &FlagsWithData) -> Result<()> {
-        if let Some(comp) = self.get_text_container_mut(node) {
-            comp.remove_flag_from(node, flag)?;
+        if let Some(mut comp) = self.find_text_container_mut(node) {
+            comp.remove_flag_from(flag)?;
         }
 
         Ok(())
@@ -386,7 +387,7 @@ fn handle_listener_mouseclick(
             inside = container.next_sibling();
 
             if container.node_type() == Node::TEXT_NODE {
-                if let Some(cont) = data.get_text_container(container.unchecked_ref()) {
+                if let Some(cont) = data.get_text_container_for_node(container.unchecked_ref()) {
                     for comp_node in &cont.text {
                         if comp_node.node.unchecked_ref::<Node>() == &container {
                             text_nodes.push(container.unchecked_into());
