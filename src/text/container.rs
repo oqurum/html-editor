@@ -1,9 +1,6 @@
-use gloo_utils::document;
-use wasm_bindgen::JsCast;
-use web_sys::{HtmlElement, Node, Text};
+use web_sys::Text;
 
-use crate::{Result, component::FlagsWithData, ComponentFlag};
-
+use crate::{component::FlagsWithData, ComponentFlag, Result, WrappedText};
 
 /// Contains the Text Node we can split apart into smaller ones.
 ///
@@ -32,9 +29,7 @@ impl TextContainer {
     }
 
     pub fn get_all_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
-        self.text.iter()
-            .flat_map(|v| v.flag.data.clone())
-            .collect()
+        self.text.iter().flat_map(|v| v.flag.data.clone()).collect()
     }
 
     pub fn has_flag(&self, flag: &FlagsWithData) -> bool {
@@ -204,143 +199,10 @@ impl<'a> std::ops::DerefMut for FoundWrappedTextRefMut<'a> {
     }
 }
 
-
-
-
-/// Contains the Text Node which can be changed with certain flags.
-#[derive(Debug, Clone)]
-pub struct WrappedText {
-    /// Span container around the text node.
-    container: HtmlElement,
-
-    // TODO: Private
-    pub node: Text,
-
-    pub offset: u32,
-
-    pub flag: FlagsWithData,
-}
-
-impl WrappedText {
-    pub fn wrap(text: Text, offset: u32, flag: FlagsWithData) -> Result<Self> {
-        Ok(Self {
-            container: create_container(&text, flag.clone())?,
-            node: text,
-            offset,
-            flag,
-        })
-    }
-
-    pub fn split(&self, index: u32) -> Result<Self> {
-        let text_split = self.node.split_text(index)?;
-        // Move Text Split to outer container layer. It'll we wrapped with container
-        self.container.after_with_node_1(&text_split)?;
-
-        Ok(Self {
-            container: create_container(&text_split, self.flag.clone())?,
-            node: text_split,
-            flag: self.flag.clone(),
-            offset: self.offset + index,
-        })
-    }
-
-    pub fn unwrap(&self) -> Result<()> {
-        // TODO: If only the Text is selected (get_selection()) then the outer parent of self.container will be selected for a tick or two.
-        self.container.replace_with_with_node_1(&self.node)?;
-
-        Ok(())
-    }
-
-    pub fn join(&mut self, other: Self) -> Result<()> {
-        if let Some(text) = other.node.text_content() {
-            self.node.append_data(&text)?;
-        }
-
-        other.remove();
-
-        Ok(())
-    }
-
-    pub fn change_flags_data(&mut self, flag: ComponentFlag, last_data_pos: u32, new_data_pos: u32) {
-        if self.flag.flag.contains(flag) {
-            for (comp_flag, data) in &mut self.flag.data {
-                if flag == *comp_flag && last_data_pos == *data {
-                    *data = new_data_pos;
-                    break;
-                }
-            }
-        }
-    }
-
-    pub fn remove(&self) {
-        self.container.remove();
-        self.node.remove();
-    }
-
-    pub fn are_flags_empty(&self) -> bool {
-        self.flag.is_empty()
-    }
-
-    pub fn intersects_flag(&self, value: ComponentFlag) -> bool {
-        self.flag.intersects_flag(value)
-    }
-
-    pub fn has_flag(&self, value: &FlagsWithData) -> bool {
-        self.flag.contains(value)
-    }
-
-    pub fn remove_all_flag(&mut self) -> Result<()> {
-        self.flag.clear();
-        self.update_container()
-    }
-
-    pub fn remove_flag(&mut self, value: &FlagsWithData) -> Result<()> {
-        self.flag.remove(value);
-        self.update_container()
-    }
-
-    pub fn add_flag(&mut self, value: FlagsWithData) -> Result<()> {
-        self.flag.insert(value);
-        self.update_container()
-    }
-
-    pub fn set_flag(&mut self, value: FlagsWithData) -> Result<()> {
-        self.flag = value;
-        self.update_container()
-    }
-
-    fn update_container(&self) -> Result<()> {
-        self.container.set_class_name(&self.flag.generate_class_name());
-
-        if self.flag.is_empty() && self.container.parent_element().is_some() {
-            // Unwrap the container.
-            self.unwrap()?;
-        } else if !self.flag.is_empty() && self.container.parent_element().is_none() {
-            // Wrap the Text Node
-            self.node.before_with_node_1(&self.container)?;
-            self.container.append_child(&self.node)?;
-        }
-
-        Ok(())
-    }
-}
-
-fn create_container(text_node: &Text, flag: FlagsWithData) -> Result<HtmlElement> {
-    let container = document().create_element("span")?;
-    container.set_class_name(&flag.generate_class_name());
-
-    if !flag.is_empty() {
-        text_node.before_with_node_1(&container)?;
-        container.append_child(text_node)?;
-    }
-
-    Ok(container.unchecked_into())
-}
-
 /// Find and join Component Nodes' of the same type.
 ///
 /// Updates the
-pub(crate) fn try_join_component_into_surroundings(
+fn try_join_component_into_surroundings(
     mut index: usize,
     nodes: &mut Vec<WrappedText>,
 ) -> Result<()> {
@@ -361,81 +223,4 @@ pub(crate) fn try_join_component_into_surroundings(
     }
 
     Ok(())
-}
-
-/// Return all text `Node`s which are between the start_node and the end_node parameters.
-pub(crate) fn get_all_text_nodes_in_container(
-    container: Node,
-    start_node: &Node,
-    end_node: &Node,
-) -> Vec<Text> {
-    if start_node == end_node {
-        if container.node_type() == Node::TEXT_NODE {
-            return vec![container.unchecked_into()];
-        } else {
-            return return_all_text_nodes(&container);
-        }
-    }
-
-    fn find_inner(
-        container: Node,
-        start_node: &Node,
-        end_node: &Node,
-        has_passed_go: &mut bool,
-        nodes: &mut Vec<Text>,
-    ) -> bool {
-        let mut inside = Some(container);
-
-        while let Some(container) = inside {
-            if &container == start_node {
-                *has_passed_go = true;
-            }
-
-            if *has_passed_go && container.node_type() == Node::TEXT_NODE {
-                log::info!("- {:?}", container.text_content());
-                // TODO: Remove clone
-                nodes.push(container.clone().unchecked_into());
-            }
-
-            if &container == end_node {
-                log::info!("end");
-                return true;
-            }
-
-            if let Some(child) = container.first_child() {
-                if find_inner(child, start_node, end_node, has_passed_go, nodes) {
-                    return true;
-                }
-            }
-
-            inside = container.next_sibling();
-        }
-
-        false
-    }
-
-    let mut nodes = Vec::new();
-
-    find_inner(container, start_node, end_node, &mut false, &mut nodes);
-
-    nodes
-}
-
-/// Returns all text nodes in the `Node`.
-pub(crate) fn return_all_text_nodes(container: &Node) -> Vec<Text> {
-    let mut found = Vec::new();
-
-    let mut inside = container.first_child();
-
-    while let Some(container) = inside {
-        if container.node_type() == Node::TEXT_NODE {
-            found.push(container.clone().unchecked_into());
-        }
-
-        found.append(&mut return_all_text_nodes(&container));
-
-        inside = container.next_sibling();
-    }
-
-    found
 }

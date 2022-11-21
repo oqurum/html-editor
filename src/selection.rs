@@ -5,7 +5,7 @@ use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{Range, Selection, Text};
 
 use crate::{
-    component::FlagsWithData, node::get_all_text_nodes_in_container, Component, ComponentFlag,
+    component::FlagsWithData, text::get_all_text_nodes_in_container, Component, ComponentFlag,
     Result, SharedListenerData,
 };
 

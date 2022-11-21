@@ -1,5 +1,3 @@
-// Coped from YEW
-
 use wasm_bindgen::JsCast;
 use web_sys::{Element, Event, EventTarget};
 
@@ -13,6 +11,7 @@ pub fn parents_contains_class(element: Element, class: &str) -> bool {
     }
 }
 
+// Copied from YEW
 pub trait TargetCast
 where
     Self: AsRef<Event>,

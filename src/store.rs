@@ -7,6 +7,7 @@ use crate::{
     component::{ComponentDataStore, FlagsWithData, SingleFlagWithData},
     listener::{register_with_data, ListenerData, ListenerHandle},
     migration::CURRENT_VERSION,
+    text::return_all_text_nodes,
     ListenerId, Result, WrappedText,
 };
 
@@ -15,7 +16,7 @@ pub fn load_and_register(
     state: SaveState,
     on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
 ) -> Result<ListenerHandle> {
-    let nodes = crate::node::return_all_text_nodes(&container);
+    let nodes = return_all_text_nodes(&container);
 
     register_with_data(container, state.into_listener_data(nodes)?, on_event)
 }

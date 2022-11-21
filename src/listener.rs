@@ -13,11 +13,11 @@ use web_sys::{Element, HtmlElement, MouseEvent, Node, Text};
 use crate::{
     component::{ComponentDataStore, Context, FlagsWithData},
     helper::{parents_contains_class, TargetCast},
-    node::{FoundWrappedTextRefMut, TextContainer},
     selection, store,
+    text::{return_all_text_nodes, FoundWrappedTextRefMut},
     toolbar::Toolbar,
     util::ElementEvent,
-    Component, ComponentFlag, Result, WrappedText,
+    Component, ComponentFlag, Result, TextContainer, WrappedText,
 };
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
@@ -272,7 +272,7 @@ pub fn register(
         let listener_id = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
         let listener_class = create_listener_class(*listener_id);
 
-        let nodes = crate::node::return_all_text_nodes(&element);
+        let nodes = return_all_text_nodes(&element);
 
         let listener_data = Rc::new(RefCell::new(ListenerData::new(listener_id, nodes)?));
         let toolbar = Toolbar::new(listener_id, Rc::downgrade(&listener_data), &on_event)?;
