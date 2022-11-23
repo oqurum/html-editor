@@ -243,17 +243,30 @@ pub fn get_nodes_in_selection(
     let start_node = range.start_container()?;
     let end_node = range.end_container()?;
 
+    let mut start_offset = range.start_offset()?;
+    let end_offset = range.end_offset()?;
+
     // Container which contains the start node -> end node
     let container = range.common_ancestor_container()?;
 
-    let nodes = get_all_text_nodes_in_container(container, &start_node, &end_node);
+    let mut nodes = get_all_text_nodes_in_container(container, &start_node, &end_node);
+
+    // Check for our start_offset the same length as the first node.
+    // I don't know what causes it but it does happen randomly.
+    if !nodes.is_empty() && start_offset == nodes[0].length() {
+        log::debug!(
+            "Removing Text Node which was included though our start_offset was at the end of it"
+        );
+        nodes.remove(0);
+        start_offset = 0;
+    }
 
     Ok(NodeContainer {
         data,
         nodes,
 
-        start_offset: range.start_offset()?,
-        end_offset: range.end_offset()?,
+        start_offset,
+        end_offset,
     })
 }
 

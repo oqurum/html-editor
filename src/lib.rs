@@ -7,8 +7,8 @@ mod listener;
 mod migration;
 mod selection;
 mod store;
-pub(crate) mod text;
-pub mod toolbar;
+mod text;
+mod toolbar;
 mod util;
 
 pub type Result<V, E = JsValue> = std::result::Result<V, E>;
