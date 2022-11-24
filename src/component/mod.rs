@@ -1,8 +1,10 @@
 use std::{borrow::Cow, cell::RefCell, rc::Rc};
 
 use bitflags::bitflags;
+use gloo_utils::window;
 use num_enum::TryFromPrimitive;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use wasm_bindgen::UnwrapThrowExt;
 
 mod highlight;
 mod italicize;
@@ -13,7 +15,6 @@ pub use highlight::*;
 pub use italicize::*;
 pub use note::*;
 pub use underline::*;
-use wasm_bindgen::UnwrapThrowExt;
 
 use crate::{selection::NodeContainer, Result};
 
@@ -156,6 +157,15 @@ impl Context {
 
     pub fn remove_selection<D: Component>(&self, data: Option<u32>) -> Result<bool> {
         self.nodes.borrow_mut().remove_selection::<D>(data)
+    }
+
+    pub fn get_selection_text(&self) -> Result<String> {
+        Ok(window()
+            .get_selection()?
+            .unwrap()
+            .to_string()
+            .as_string()
+            .unwrap())
     }
 
     pub fn save(&self) {
