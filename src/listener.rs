@@ -14,7 +14,7 @@ use crate::{
     component::{ComponentDataStore, Context, FlagsWithData},
     helper::{parents_contains_class, TargetCast},
     selection, store,
-    text::{return_all_text_nodes, FoundWrappedTextRefMut},
+    text::{return_all_text_nodes, FoundWrappedTextRefMut, TextContentWithFlag},
     toolbar::Toolbar,
     util::ElementEvent,
     Component, ComponentFlag, Result, TextContainer, WrappedText,
@@ -96,6 +96,39 @@ impl ListenerData {
                 .map(TextContainer::new)
                 .collect::<Result<_>>()?,
         })
+    }
+
+    // TODO: Put into a better location
+    pub fn get_flagged_text(&self) -> Vec<TextContentWithFlag> {
+        let mut found = Vec::new();
+
+        let v = self.nodes.iter().flat_map(|c| c.text.iter()).fold(
+            Option::<TextContentWithFlag>::None,
+            |mut store, text| {
+                if text.flag.is_empty() {
+                    if let Some(value) = store.take() {
+                        found.push(value);
+                    }
+                } else if let Some(value) = store.as_mut() {
+                    value.flag.insert(text.flag.flag);
+                    value.content += &text.node.text_content().unwrap();
+                } else {
+                    store = Some(TextContentWithFlag {
+                        flag: text.flag.flag,
+                        content: text.node.text_content().unwrap(),
+                        first_text_node: text.node.clone(),
+                    });
+                }
+
+                store
+            },
+        );
+
+        if let Some(value) = v {
+            found.push(value);
+        }
+
+        found
     }
 
     pub fn store_data<S: Serialize>(&mut self, flag: ComponentFlag, data: &S) -> u32 {

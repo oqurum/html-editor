@@ -7,6 +7,14 @@ mod wrapper;
 pub use container::*;
 pub use wrapper::*;
 
+use crate::ComponentFlag;
+
+pub struct TextContentWithFlag {
+    pub flag: ComponentFlag,
+    pub first_text_node: Text,
+    pub content: String,
+}
+
 /// Returns all text nodes in the `Node`.
 pub fn return_all_text_nodes(container: &Node) -> Vec<Text> {
     let mut found = Vec::new();

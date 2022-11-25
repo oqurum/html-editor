@@ -8,11 +8,13 @@ use wasm_bindgen::UnwrapThrowExt;
 
 mod highlight;
 mod italicize;
+mod list;
 mod note;
 mod underline;
 
 pub use highlight::*;
 pub use italicize::*;
+pub use list::*;
 pub use note::*;
 pub use underline::*;
 
