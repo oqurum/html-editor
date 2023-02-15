@@ -307,11 +307,6 @@ impl ListenerHandle {
             }
         }
 
-        if start_offset == start_offset + length {
-            log::debug!("Unable to find word");
-            return Ok(());
-        }
-
         let Some(selection) = document.get_selection()? else {
             log::debug!("Unable to get selection");
             return Ok(());
@@ -327,6 +322,11 @@ impl ListenerHandle {
         // TODO: If we disabled events and we double click OOBs this can be called and displays the toolbar.
         if selection.range_count() != 0 {
             display_toolbar(&handler)?;
+        }
+
+        if start_offset == start_offset + length {
+            log::debug!("Unable to find word");
+            return Ok(());
         }
 
         // Check if we're out of bounds
