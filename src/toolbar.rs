@@ -7,7 +7,7 @@ use web_sys::{HtmlElement, MouseEvent};
 
 use crate::{
     component::{Component, Context, Highlight, List, Note},
-    listener::SharedListenerData,
+    listener::{ListenerEvent, SharedListenerData},
     selection,
     util::ElementEvent,
     ListenerId, Result,
@@ -26,7 +26,7 @@ impl Toolbar {
     pub fn new(
         listener_id: ListenerId,
         data: SharedListenerData,
-        func: &Rc<RefCell<dyn Fn(ListenerId)>>,
+        func: &ListenerEvent,
     ) -> Result<Self> {
         let mut this = Self {
             popup: document().create_element("div")?.unchecked_into(),
@@ -60,11 +60,7 @@ impl Toolbar {
         self.popup.remove();
     }
 
-    fn create_popup(
-        &mut self,
-        data: SharedListenerData,
-        func: &Rc<RefCell<dyn Fn(ListenerId)>>,
-    ) -> Result<()> {
+    fn create_popup(&mut self, data: SharedListenerData, func: &ListenerEvent) -> Result<()> {
         let element = &self.popup;
         element.set_class_name("toolbar");
 
@@ -93,7 +89,7 @@ impl Toolbar {
         &mut self,
         component: C,
         data: SharedListenerData,
-        func: Rc<RefCell<dyn Fn(ListenerId)>>,
+        func: ListenerEvent,
     ) -> Result<()> {
         let listener_id = self.listener_id;
 

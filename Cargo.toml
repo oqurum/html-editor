@@ -43,6 +43,7 @@ features = [
 	"CssStyleDeclaration",
 	"DomTokenList",
 	"DomRect",
+	"CaretPosition",
 	"Selection",
 	"Range",
 ]

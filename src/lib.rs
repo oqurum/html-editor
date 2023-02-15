@@ -14,7 +14,9 @@ mod util;
 pub type Result<V, E = JsValue> = std::result::Result<V, E>;
 
 pub use component::{Component, ComponentFlag};
-pub use listener::{register, register_with_data, ListenerId};
+pub use listener::{
+    register, register_with_data, ListenerEvent, ListenerHandle, ListenerId, MouseListener,
+};
 pub use store::{load_and_register, save, SaveState, SavedNode, SavedNodeFlag};
 pub use text::{TextContainer, WrappedText};
 

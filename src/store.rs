@@ -1,11 +1,9 @@
-use std::{cell::RefCell, rc::Rc};
-
 use serde::{Deserialize, Serialize};
 use web_sys::{HtmlElement, Text};
 
 use crate::{
     component::{ComponentDataStore, FlagsWithData, SingleFlagWithData},
-    listener::{register_with_data, ListenerData, ListenerHandle},
+    listener::{register_with_data, ListenerData, ListenerEvent, ListenerHandle, MouseListener},
     migration::CURRENT_VERSION,
     text::return_all_text_nodes,
     ListenerId, Result, WrappedText,
@@ -14,11 +12,17 @@ use crate::{
 pub fn load_and_register(
     container: HtmlElement,
     state: SaveState,
-    on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
+    listener: MouseListener,
+    on_event: Option<ListenerEvent>,
 ) -> Result<ListenerHandle> {
     let nodes = return_all_text_nodes(&container);
 
-    register_with_data(container, state.into_listener_data(nodes)?, on_event)
+    register_with_data(
+        container,
+        state.into_listener_data(nodes)?,
+        listener,
+        on_event,
+    )
 }
 
 pub fn save(state: &ListenerData) -> SaveState {
@@ -48,6 +52,7 @@ pub struct SaveState {
 }
 
 impl SaveState {
+    /// Creates the listener tree
     pub(crate) fn into_listener_data(self, nodes: Vec<Text>) -> Result<ListenerData> {
         // ListenerId is set in the listener function.
         let mut listener = ListenerData::new(ListenerId::unset(), nodes)?;

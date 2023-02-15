@@ -7,8 +7,8 @@ use std::{
 use gloo_utils::document;
 use lazy_static::lazy_static;
 use serde::Serialize;
-use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
-use web_sys::{Element, HtmlElement, MouseEvent, Node, Text};
+use wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt};
+use web_sys::{Document, Element, HtmlElement, MouseEvent, Node, Range, Text};
 
 use crate::{
     component::{ComponentDataStore, Context, FlagsWithData},
@@ -22,6 +22,7 @@ use crate::{
 
 pub type SharedListenerType = Rc<RefCell<Listener>>;
 pub type SharedListenerData = Weak<RefCell<ListenerData>>;
+pub type ListenerEvent = Rc<RefCell<dyn Fn(ListenerId)>>;
 // TODO: Fix. I don't like all these Rc's
 
 lazy_static! {
@@ -30,6 +31,12 @@ lazy_static! {
 
 thread_local! {
     static LISTENERS: RefCell<Vec<SharedListenerType>> = RefCell::new(Vec::new());
+}
+
+#[derive(PartialEq, Eq)]
+pub enum MouseListener {
+    All,
+    Ignore,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,7 +215,7 @@ impl ListenerData {
 pub struct Listener {
     pub listener_id: ListenerId,
 
-    pub on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
+    pub on_event: ListenerEvent,
 
     pub element: HtmlElement,
     functions: Vec<ElementEvent>,
@@ -220,6 +227,131 @@ pub struct Listener {
 
 /// Keeps the listener active until we're dropped.
 pub struct ListenerHandle(ListenerId);
+
+impl ListenerHandle {
+    /// Highlights' the word you clicked and opens the toolbar.
+    pub fn select_word_from_point(
+        &self,
+        x: f32,
+        y: f32,
+        document: &Document,
+    ) -> Result<(), JsValue> {
+        // TODO: Add periods?
+        fn is_stop_break(value: &u8) -> bool {
+            [
+                b' ', b'.', b',', b'?', b'!', b'"', b'\'', b'*', b'(', b')', b';', b':',
+            ]
+            .contains(value)
+        }
+
+        let Some(caret) = document.caret_position_from_point(x, y) else {
+            log::debug!("Unable to get Caret Position");
+            return Ok(());
+        };
+
+        let Some(node) = caret.offset_node() else {
+            log::debug!("Unable to find Caret Offset Node");
+            return Ok(());
+        };
+
+        let Some(node_value) = node.node_value() else {
+            log::debug!("Unable to get Node Value");
+            return Ok(());
+        };
+
+        let node_offset = caret.offset() as usize;
+
+        let mut start_offset = node_offset;
+        let mut length = node_value.len();
+
+        // TODO: Optimize. We need to check other Nodes.
+        if node_value
+            .as_bytes()
+            .get(start_offset)
+            .map(is_stop_break)
+            .unwrap_or_default()
+        {
+            start_offset += 1;
+
+            for i in 0..length {
+                if let Some(next_byte) = node_value.as_bytes().get(start_offset + i) {
+                    if is_stop_break(next_byte) {
+                        length = i;
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        } else {
+            // Backtrack
+            for i in (0..start_offset).rev() {
+                if is_stop_break(node_value.as_bytes().get(i).unwrap()) {
+                    start_offset = i + 1;
+                    break;
+                } else if i == 0 {
+                    start_offset = 0;
+                }
+            }
+
+            // Move until space
+            for i in 0..length {
+                if let Some(next_byte) = node_value.as_bytes().get(node_offset + i) {
+                    if is_stop_break(next_byte) {
+                        length = node_offset - start_offset + i;
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        if start_offset == start_offset + length {
+            log::debug!("Unable to find word");
+            return Ok(());
+        }
+
+        let Some(selection) = document.get_selection()? else {
+            log::debug!("Unable to get selection");
+            return Ok(());
+        };
+
+        let Some(listener) = self.0.try_get() else {
+            log::debug!("Unable to acquire listener. Does it still exist?");
+            return Ok(());
+        };
+
+        let handler = Rc::downgrade(&listener);
+
+        // TODO: If we disabled events and we double click OOBs this can be called and displays the toolbar.
+        if selection.range_count() != 0 {
+            display_toolbar(&handler)?;
+        }
+
+        // Check if we're out of bounds
+        if node_value.len() < start_offset + length {
+            log::debug!("Invalid Selection");
+            return Ok(());
+        }
+
+        // Selection Range Changes
+        selection.remove_all_ranges()?;
+
+        let range = Range::new()?;
+
+        range.set_start(&node, start_offset as u32)?;
+        range.set_end(&node, (start_offset + length) as u32)?;
+
+        selection.add_range(&range)?;
+
+        // Open Toolbar
+
+        display_toolbar(&handler)?;
+
+        Ok(())
+    }
+}
 
 impl Drop for ListenerHandle {
     fn drop(&mut self) {
@@ -249,7 +381,8 @@ impl Drop for ListenerHandle {
 pub fn register_with_data(
     element: HtmlElement,
     mut data: ListenerData,
-    on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
+    listener: MouseListener,
+    on_event: Option<ListenerEvent>,
 ) -> Result<ListenerHandle> {
     LISTENERS.with(|listeners| -> Result<ListenerHandle> {
         let mut listeners = listeners.borrow_mut();
@@ -258,6 +391,11 @@ pub fn register_with_data(
         if listeners.iter().any(|l| l.borrow().element == element) {
             panic!("Already Listening on Element!");
         }
+
+        let on_event = match on_event {
+            Some(v) => v,
+            None => Rc::new(RefCell::new(|_| {})) as ListenerEvent,
+        };
 
         let index = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
         let listener_class = create_listener_class(*index);
@@ -281,7 +419,9 @@ pub fn register_with_data(
             data: listener_data,
         }));
 
-        register_listener_events(&listener_rc, listener_class)?;
+        if listener == MouseListener::All {
+            register_listener_events(&listener_rc, listener_class)?;
+        }
 
         listeners.push(listener_rc);
 
@@ -292,7 +432,8 @@ pub fn register_with_data(
 /// Should be called AFTER page has fully loaded and finished any Element changes.
 pub fn register(
     element: HtmlElement,
-    on_event: Rc<RefCell<dyn Fn(ListenerId)>>,
+    listener: MouseListener,
+    on_event: Option<ListenerEvent>,
 ) -> Result<ListenerHandle> {
     LISTENERS.with(|listeners| -> Result<ListenerHandle> {
         let mut listeners = listeners.borrow_mut();
@@ -301,6 +442,11 @@ pub fn register(
         if listeners.iter().any(|l| l.borrow().element == element) {
             panic!("Already Listening on Element!");
         }
+
+        let on_event = match on_event {
+            Some(v) => v,
+            None => Rc::new(RefCell::new(|_| {})) as ListenerEvent,
+        };
 
         let listener_id = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
         let listener_class = create_listener_class(*listener_id);
@@ -325,7 +471,9 @@ pub fn register(
             data: listener_data,
         }));
 
-        register_listener_events(&listener_rc, listener_class)?;
+        if listener == MouseListener::All {
+            register_listener_events(&listener_rc, listener_class)?;
+        }
 
         listeners.push(listener_rc);
 

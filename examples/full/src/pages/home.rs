@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use editor::{load_and_register, ListenerId, SaveState};
+use editor::{load_and_register, ListenerEvent, ListenerId, MouseListener, SaveState};
 use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{window, HtmlElement};
 use yew::{
@@ -31,7 +31,8 @@ pub fn home() -> Html {
 
             let handle = editor::register(
                 node.cast::<HtmlElement>().unwrap_throw(),
-                Rc::new(RefCell::new(move |id: ListenerId| {
+                MouseListener::Ignore,
+                Some(Rc::new(RefCell::new(move |id: ListenerId| {
                     let save = id.try_save();
                     // log::debug!("{:#?}", save);
                     *last_save.borrow_mut() = save;
@@ -40,7 +41,7 @@ pub fn home() -> Html {
                         "{:#?}",
                         id.try_get().unwrap().borrow().data.borrow()
                     ));
-                })) as Rc<RefCell<dyn Fn(ListenerId)>>,
+                })) as ListenerEvent),
             )
             .expect_throw("Registering");
 
@@ -89,7 +90,8 @@ pub fn home() -> Html {
                     let handle = match load_and_register(
                         node.cast::<HtmlElement>().unwrap_throw(),
                         v.clone(),
-                        Rc::new(RefCell::new(move |id: ListenerId| {
+                        MouseListener::Ignore,
+                        Some(Rc::new(RefCell::new(move |id: ListenerId| {
                             let save = id.try_save();
                             // log::debug!("{:#?}", save);
                             *last_save2.borrow_mut() = save;
@@ -98,7 +100,7 @@ pub fn home() -> Html {
                                 "{:#?}",
                                 id.try_get().unwrap().borrow().data.borrow()
                             ));
-                        })) as Rc<RefCell<dyn Fn(ListenerId)>>,
+                        })) as ListenerEvent),
                     ) {
                         Ok(v) => v,
                         Err(e) => {
