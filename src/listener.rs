@@ -47,6 +47,10 @@ impl ListenerId {
         Self(0)
     }
 
+    fn to_class_string(self) -> String {
+        format!("edit-listener-{}", self.0)
+    }
+
     pub fn try_get(&self) -> Option<SharedListenerType> {
         LISTENERS.with(|listeners| {
             let listeners = listeners.borrow();
@@ -254,6 +258,10 @@ impl ListenerHandle {
             return Ok(());
         };
 
+        if !parents_contains_class(node.parent_element().unwrap(), &self.0.to_class_string()) {
+            return Ok(());
+        }
+
         let Some(node_value) = node.node_value() else {
             log::debug!("Unable to get Node Value");
             return Ok(());
@@ -364,7 +372,7 @@ impl Drop for ListenerHandle {
             {
                 let listener = listeners.remove(index);
 
-                let listener_class = create_listener_class(*self.0);
+                let listener_class = self.0.to_class_string();
 
                 let _ = listener
                     .borrow()
@@ -398,7 +406,7 @@ pub fn register_with_data(
         };
 
         let index = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
-        let listener_class = create_listener_class(*index);
+        let listener_class = index.to_class_string();
 
         data.listener_id = index;
         let listener_data = Rc::new(RefCell::new(data));
@@ -449,7 +457,7 @@ pub fn register(
         };
 
         let listener_id = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
-        let listener_class = create_listener_class(*listener_id);
+        let listener_class = listener_id.to_class_string();
 
         let nodes = return_all_text_nodes(&element);
 
@@ -641,8 +649,4 @@ fn display_toolbar(handler: &Weak<RefCell<Listener>>) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn create_listener_class(index: usize) -> String {
-    format!("edit-listener-{index}",)
 }
