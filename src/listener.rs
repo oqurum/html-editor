@@ -240,7 +240,6 @@ impl ListenerHandle {
         y: f32,
         document: &Document,
     ) -> Result<(), JsValue> {
-        // TODO: Add periods?
         fn is_stop_break(value: &u8) -> bool {
             [
                 b' ', b'.', b',', b'?', b'!', b'"', b'\'', b'*', b'(', b')', b';', b':',
@@ -639,11 +638,7 @@ fn display_toolbar(handler: &Weak<RefCell<Listener>>) -> Result<()> {
     let mut handler = handler.borrow_mut();
 
     if let Some(selection) = document().get_selection()?.filter(|v| !v.is_collapsed()) {
-        let range = selection.get_range_at(0).unwrap_throw();
-
-        let bb = range.get_bounding_client_rect();
-
-        handler.toolbar.open(bb.x(), bb.y(), bb.width())?;
+        handler.toolbar.open(selection)?;
     } else {
         handler.toolbar.close();
     }

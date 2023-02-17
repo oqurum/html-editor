@@ -3,14 +3,14 @@ use std::{cell::RefCell, rc::Rc};
 use chrono::{Duration, Utc};
 use gloo_utils::document;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
-use web_sys::{HtmlElement, MouseEvent};
+use web_sys::{HtmlElement, MouseEvent, Selection};
 
 use crate::{
     component::{Component, Context, Highlight, List, Note},
     listener::{ListenerEvent, SharedListenerData},
     selection,
     util::ElementEvent,
-    ListenerId, Result,
+    ComponentFlag, ListenerId, Result,
 };
 
 pub struct Toolbar {
@@ -18,6 +18,7 @@ pub struct Toolbar {
     mouse_down_listener: Option<Closure<dyn Fn(MouseEvent)>>,
 
     listener_id: ListenerId,
+    data: SharedListenerData,
 
     buttons: Vec<Button>,
 }
@@ -32,6 +33,7 @@ impl Toolbar {
             popup: document().create_element("div")?.unchecked_into(),
             buttons: Vec::new(),
             mouse_down_listener: None,
+            data: data.clone(),
             listener_id,
         };
 
@@ -40,10 +42,22 @@ impl Toolbar {
         Ok(this)
     }
 
-    pub fn open(&mut self, x: f64, y: f64, selected_width: f64) -> Result<()> {
+    pub fn open(&mut self, selection: Selection) -> Result<()> {
+        let range = selection.get_range_at(0)?;
+        let bb = range.get_bounding_client_rect();
+        let (x, y, selected_width) = (bb.x(), bb.y(), bb.width());
+
+        let node_sel =
+            selection::get_nodes_in_selection(selection, self.data.clone()).unwrap_throw();
+        let selected = node_sel.get_selected_data_ids();
+
         const HEIGHT: f64 = 30.0;
 
         self.close();
+
+        for button in &self.buttons {
+            button.set_selected(selected.iter().any(|&(f, _)| f == button.type_of))?;
+        }
 
         let style = self.popup.style();
 
@@ -153,7 +167,11 @@ impl Toolbar {
             ));
         }
 
-        self.buttons.push(Button { element, events });
+        self.buttons.push(Button {
+            element,
+            events,
+            type_of: C::FLAG,
+        });
 
         Ok(())
     }
@@ -161,6 +179,23 @@ impl Toolbar {
 
 #[allow(dead_code)]
 pub struct Button {
+    type_of: ComponentFlag,
     element: HtmlElement,
     events: Vec<ElementEvent>,
+}
+
+impl Button {
+    pub fn set_selected(&self, value: bool) -> Result<()> {
+        let class_list = self.element.class_list();
+
+        if value {
+            if !class_list.contains("selected") {
+                class_list.add_1("selected")?;
+            }
+        } else {
+            class_list.remove_1("selected")?;
+        }
+
+        Ok(())
+    }
 }
