@@ -27,7 +27,7 @@ impl NodeContainer {
             .iter()
             .filter_map(|text| {
                 let cont = page_data.get_text_container_for_node(text)?;
-                Some(cont.get_all_data_ids())
+                Some(cont.get_wrapped_text(text).unwrap().flag.data.clone())
             })
             .flatten()
             .collect()
