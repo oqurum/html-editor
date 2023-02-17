@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use wasm_bindgen::prelude::*;
 
 mod app;
