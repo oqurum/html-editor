@@ -19,5 +19,6 @@ jobs:
     - name: Build
       run: |
         cd examples/full
+        cargo target add wasm32-unknown-unknown
         cargo install --locked trunk
         trunk build --public-url "/dist"
