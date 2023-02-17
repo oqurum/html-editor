@@ -20,4 +20,4 @@ jobs:
       run: |
         cd examples/full
         cargo install --locked trunk
-        cargo build --verbose
+        trunk build --public-url "/dist"
