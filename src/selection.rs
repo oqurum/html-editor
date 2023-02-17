@@ -12,13 +12,35 @@ use crate::{
 pub struct NodeContainer {
     pub(crate) data: SharedListenerData,
 
+    /// All the nodes which are selected
     nodes: Vec<Text>,
 
+    /// Offset of the first Node
     start_offset: u32,
+
+    /// Offset of the end Node
     end_offset: u32,
+
+    was_text_split: bool,
 }
 
 impl NodeContainer {
+    pub fn new(
+        data: SharedListenerData,
+        nodes: Vec<Text>,
+        start_offset: u32,
+        end_offset: u32,
+    ) -> Self {
+        Self {
+            data,
+            nodes,
+            start_offset,
+            end_offset,
+
+            was_text_split: false,
+        }
+    }
+
     pub fn get_selected_data_ids(&self) -> Vec<(ComponentFlag, u32)> {
         let page_data = self.data.upgrade().expect_throw("data upgrade");
         let page_data = page_data.borrow();
@@ -45,6 +67,37 @@ impl NodeContainer {
         })
     }
 
+    pub fn remove_flag_nodes(&mut self, flag: ComponentFlag) -> bool {
+        let page_data = self.data.upgrade().expect_throw("data upgrade");
+        let page_data = page_data.borrow();
+
+        // TODO: Handle
+        let len = self.nodes.len();
+        for (i, text) in std::mem::take(&mut self.nodes).into_iter().enumerate() {
+            if page_data
+                .get_text_wrapper(&text)
+                .filter(|v| v.intersects_flag(flag))
+                .is_none()
+            {
+                self.nodes.push(text);
+            } else {
+                if self.nodes.is_empty() {
+                    self.start_offset = 0;
+                }
+
+                if i + 1 == len {
+                    if let Some(node) = self.nodes.last() {
+                        self.end_offset = node.length();
+                    } else {
+                        self.end_offset = 0;
+                    }
+                }
+            }
+        }
+
+        true
+    }
+
     pub fn does_selected_contain(&self, flag: &FlagsWithData) -> bool {
         let page_data = self.data.upgrade().expect_throw("data upgrade");
         let page_data = page_data.borrow();
@@ -57,13 +110,35 @@ impl NodeContainer {
         })
     }
 
-    pub fn insert_selection<D: Component>(&mut self, data: Option<u32>) -> Result<bool> {
+    pub fn insert_selection<D: Component>(
+        &mut self,
+        data: Option<u32>,
+    ) -> Result<Result<(), &'static str>> {
         let flag =
             FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
 
         if self.does_selected_intersect(D::ALLOWED_SIBLINGS.complement()) {
-            log::error!("Not Allowed");
-            return Ok(false);
+            // If Allowed Siblings is empty and we don't overwrite the non-allowed ones.
+            if D::ALLOWED_SIBLINGS.is_empty() && !D::OVERWRITE_INVALID {
+                log::debug!("Unable to insert. Inserting on invalid ");
+                return Ok(Err("Unable to add this Component"));
+            } else {
+                // Split and unset invalid
+                if D::OVERWRITE_INVALID {
+                    self.split_and_acq_text_nodes()?;
+
+                    let page_data = self.data.upgrade().expect_throw("data upgrade");
+                    let mut page_data = page_data.borrow_mut();
+
+                    for node in &self.nodes {
+                        if let Some(mut wrap) = page_data.get_text_container_mut(node) {
+                            wrap.empty_flags_from().unwrap_throw();
+                        }
+                    }
+                } else {
+                    self.remove_flag_nodes(D::ALLOWED_SIBLINGS.complement());
+                }
+            }
         }
 
         log::debug!("set component");
@@ -79,7 +154,7 @@ impl NodeContainer {
 
         self.reload_selection()?;
 
-        Ok(true)
+        Ok(Ok(()))
     }
 
     pub fn remove_selection<D: Component>(&mut self, data: Option<u32>) -> Result<bool> {
@@ -174,6 +249,12 @@ impl NodeContainer {
     // TODO: Range::end_offset() can equal 0. If it does that means we should NOT push the Node to self.nodes.
 
     fn split_and_acq_text_nodes(&mut self) -> Result<()> {
+        if self.was_text_split {
+            return Ok(());
+        }
+
+        self.was_text_split = true;
+
         // We've selected inside a single node.
         if self.nodes.is_empty() {
             return Ok(());
@@ -261,21 +342,9 @@ pub fn get_nodes_in_selection(
         start_offset = 0;
     }
 
-    Ok(NodeContainer {
-        data,
-        nodes,
-
-        start_offset,
-        end_offset,
-    })
+    Ok(NodeContainer::new(data, nodes, start_offset, end_offset))
 }
 
 pub fn create_container(nodes: Vec<Text>, data: SharedListenerData) -> Result<NodeContainer> {
-    Ok(NodeContainer {
-        data,
-        nodes,
-
-        start_offset: 0,
-        end_offset: 0,
-    })
+    Ok(NodeContainer::new(data, nodes, 0, 0))
 }

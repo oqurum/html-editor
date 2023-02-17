@@ -150,38 +150,28 @@ pub struct FoundWrappedTextRefMut<'a> {
 }
 
 impl<'a> FoundWrappedTextRefMut<'a> {
-    pub fn get_text(&mut self) -> &mut WrappedText {
+    pub fn get_text_mut(&mut self) -> &mut WrappedText {
         &mut self.container.text[self.node_index]
     }
 
     pub fn add_flag_to(&mut self, flag: FlagsWithData) -> Result<()> {
-        let comp = &mut self.container.text[self.node_index];
-
-        comp.add_flag(flag)?;
-
-        try_join_component_into_surroundings(self.node_index, &mut self.container.text)?;
-
-        Ok(())
+        self.get_text_mut().add_flag(flag)
     }
 
     pub fn set_flag_for(&mut self, flag: FlagsWithData) -> Result<()> {
-        let comp = &mut self.container.text[self.node_index];
-
-        comp.set_flag(flag)?;
-
-        try_join_component_into_surroundings(self.node_index, &mut self.container.text)?;
-
-        Ok(())
+        self.get_text_mut().set_flag(flag)
     }
 
     pub fn remove_flag_from(&mut self, flag: &FlagsWithData) -> Result<()> {
-        let comp = &mut self.container.text[self.node_index];
+        self.get_text_mut().remove_flag(flag)
+    }
 
-        comp.remove_flag(flag)?;
+    pub fn empty_flags_from(&mut self) -> Result<()> {
+        self.get_text_mut().remove_all_flag()
+    }
 
-        try_join_component_into_surroundings(self.node_index, &mut self.container.text)?;
-
-        Ok(())
+    pub fn rejoin_into_surrounding(&mut self) -> Result<()> {
+        try_join_component_into_surroundings(self.node_index, &mut self.container.text)
     }
 }
 

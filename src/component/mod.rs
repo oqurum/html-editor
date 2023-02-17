@@ -161,7 +161,7 @@ impl<D: Component> Context<D> {
         self.nodes.borrow().get_selected_data_ids()
     }
 
-    pub fn insert_selection(&self, data: Option<u32>) -> Result<bool> {
+    pub fn insert_selection(&self, data: Option<u32>) -> Result<Result<(), &'static str>> {
         self.nodes.borrow_mut().insert_selection::<D>(data)
     }
 

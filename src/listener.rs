@@ -200,6 +200,7 @@ impl ListenerData {
     pub fn update_container(&mut self, text: &Text, flag: FlagsWithData) -> Result<()> {
         if let Some(mut comp) = self.get_text_container_mut(text) {
             comp.add_flag_to(flag)?;
+            comp.rejoin_into_surrounding();
         } else {
             panic!("unable to find Text Container");
         }
@@ -210,6 +211,7 @@ impl ListenerData {
     pub fn remove_component_node_flag(&mut self, node: &Text, flag: &FlagsWithData) -> Result<()> {
         if let Some(mut comp) = self.get_text_container_mut(node) {
             comp.remove_flag_from(flag)?;
+            comp.rejoin_into_surrounding();
         }
 
         Ok(())
