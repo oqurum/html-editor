@@ -7,7 +7,7 @@ edition = "2021"
 
 
 [dependencies]
-editor = { path = "../..", features = ["frontend"] }
+editor = { path = "../.." }
 
 log = "0.4"
 serde_json = "1.0"

@@ -82,7 +82,7 @@ impl ComponentData for () {
 }
 
 /// `ComponentFlag` is used to determine the type of component the Store is for.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComponentDataStore(pub(crate) ComponentFlag, pub(crate) String);
 
 impl ComponentDataStore {
@@ -397,7 +397,7 @@ impl FlagsWithData {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct SingleFlagWithData(u64);
+pub struct SingleFlagWithData(pub(crate) u64);
 // TODO: Replace u64 w/ enum for Component, Data (array)
 
 impl SingleFlagWithData {

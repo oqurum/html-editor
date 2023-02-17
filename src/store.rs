@@ -1,3 +1,4 @@
+use bytes::Buf;
 use serde::{Deserialize, Serialize};
 use web_sys::{HtmlElement, Text};
 
@@ -6,7 +7,7 @@ use crate::{
     listener::{register_with_data, ListenerData, ListenerEvent, ListenerHandle, MouseListener},
     migration::CURRENT_VERSION,
     text::return_all_text_nodes,
-    ListenerId, Result, WrappedText,
+    ComponentFlag, ListenerId, Result, WrappedText,
 };
 
 pub fn load_and_register(
@@ -44,7 +45,7 @@ pub fn save(state: &ListenerData) -> SaveState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SaveState {
     pub version: usize,
     pub(crate) data: Vec<ComponentDataStore>,
@@ -100,9 +101,63 @@ impl SaveState {
 
         Ok(listener)
     }
+
+    pub fn into_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        bytes.extend_from_slice(&self.version.to_be_bytes());
+
+        // Data
+        bytes.extend_from_slice(&(self.data.len() as u32).to_be_bytes());
+
+        for node in &self.data {
+            bytes.extend_from_slice(&node.0.bits().to_be_bytes());
+            bytes.extend_from_slice(&(node.1.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(node.1.as_bytes());
+        }
+
+        // Nodes
+        bytes.extend_from_slice(&(self.nodes.len() as u32).to_be_bytes());
+
+        for node in &self.nodes {
+            bytes.append(&mut node.into_bytes());
+        }
+
+        bytes
+    }
+
+    pub fn from_bytes<B: Buf>(bytes: &mut B) -> Self {
+        Self {
+            version: bytes.get_u64() as usize,
+            data: {
+                let mut array = Vec::new();
+
+                for _ in 0..bytes.get_u32() {
+                    let flag = ComponentFlag::from_bits_truncate(bytes.get_u32());
+
+                    let str_len = bytes.get_u32();
+                    let value = bytes.copy_to_bytes(str_len as usize);
+                    let value = String::from_utf8(value.to_vec()).unwrap();
+
+                    array.push(ComponentDataStore(flag, value));
+                }
+
+                array
+            },
+            nodes: {
+                let mut array = Vec::new();
+
+                for _ in 0..bytes.get_u32() {
+                    array.push(SavedNode::from_bytes(bytes));
+                }
+
+                array
+            },
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedNode {
     /// Node Index
     index: usize,
@@ -133,12 +188,151 @@ impl SavedNode {
             },
         }
     }
+
+    pub fn into_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        bytes.extend_from_slice(&self.index.to_be_bytes());
+
+        bytes.extend_from_slice(&(self.flags.len() as u32).to_be_bytes());
+
+        for flags in &self.flags {
+            bytes.append(&mut flags.into_bytes());
+        }
+
+        bytes
+    }
+
+    pub fn from_bytes<B: Buf>(bytes: &mut B) -> Self {
+        Self {
+            index: bytes.get_u64() as usize,
+            flags: {
+                let mut array = Vec::new();
+
+                for _ in 0..bytes.get_u32() {
+                    array.push(SavedNodeFlag::from_bytes(bytes));
+                }
+
+                array
+            },
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedNodeFlag {
     offset: u32,
     length: Option<u32>,
     // TODO: Should I change to vec with SingleFlagWithData?
     flags: Vec<SingleFlagWithData>,
+}
+
+impl SavedNodeFlag {
+    pub fn into_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        bytes.extend_from_slice(&self.offset.to_be_bytes());
+
+        if let Some(len) = self.length {
+            bytes.push(1);
+            bytes.extend_from_slice(&len.to_be_bytes());
+        } else {
+            bytes.push(0);
+        }
+
+        // We should never have a length greater than 255.
+        bytes.push(self.flags.len() as u8);
+
+        for flags in &self.flags {
+            bytes.extend_from_slice(&flags.0.to_be_bytes());
+        }
+
+        bytes
+    }
+
+    pub fn from_bytes<B: Buf>(bytes: &mut B) -> Self {
+        Self {
+            offset: bytes.get_u32(),
+            length: {
+                if bytes.get_u8() == 1 {
+                    Some(bytes.get_u32())
+                } else {
+                    None
+                }
+            },
+            flags: {
+                let mut array = Vec::new();
+
+                for _ in 0..bytes.get_u8() {
+                    array.push(SingleFlagWithData(bytes.get_u64()));
+                }
+
+                array
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+
+    use crate::ComponentFlag;
+
+    use super::*;
+
+    #[test]
+    fn save_node_flag_to_from_bytes() {
+        let save = SavedNodeFlag {
+            offset: 1234,
+            length: Some(5678),
+            flags: vec![SingleFlagWithData::new(ComponentFlag::ITALICIZE, 11)],
+        };
+
+        let bytes = save.into_bytes();
+
+        let save2 = SavedNodeFlag::from_bytes(&mut Bytes::from(bytes));
+
+        assert_eq!(save, save2);
+    }
+
+    #[test]
+    fn save_node_to_from_bytes() {
+        let save = SavedNode {
+            index: 0,
+            flags: vec![SavedNodeFlag {
+                offset: 1234,
+                length: Some(5678),
+                flags: vec![SingleFlagWithData::new(ComponentFlag::ITALICIZE, 11)],
+            }],
+        };
+
+        let bytes = save.into_bytes();
+
+        let save2 = SavedNode::from_bytes(&mut Bytes::from(bytes));
+
+        assert_eq!(save, save2);
+    }
+
+    #[test]
+    fn save_state_to_from_bytes() {
+        let save = SaveState {
+            version: 12345,
+            data: vec![ComponentDataStore::new(ComponentFlag::ITALICIZE, &100)],
+            nodes: vec![SavedNode {
+                index: 0,
+                flags: vec![SavedNodeFlag {
+                    offset: 1234,
+                    length: Some(5678),
+                    flags: vec![SingleFlagWithData::new(ComponentFlag::ITALICIZE, 11)],
+                }],
+            }],
+        };
+
+        let bytes = save.into_bytes();
+
+        let save2 = SaveState::from_bytes(&mut Bytes::from(bytes));
+
+        assert_eq!(save, save2);
+    }
 }
