@@ -34,13 +34,10 @@ pub fn home() -> Html {
                 MouseListener::All,
                 Some(Rc::new(RefCell::new(move |id: ListenerId| {
                     let save = id.try_save();
-                    // log::debug!("{:#?}", save);
-                    *last_save.borrow_mut() = save;
 
-                    debug.set(format!(
-                        "{:#?}",
-                        id.try_get().unwrap().borrow().data.borrow()
-                    ));
+                    debug.set(format!("{save:#?}"));
+
+                    *last_save.borrow_mut() = save;
                 })) as ListenerEvent),
             )
             .expect_throw("Registering");
@@ -93,13 +90,10 @@ pub fn home() -> Html {
                         MouseListener::All,
                         Some(Rc::new(RefCell::new(move |id: ListenerId| {
                             let save = id.try_save();
-                            // log::debug!("{:#?}", save);
-                            *last_save2.borrow_mut() = save;
 
-                            debug.set(format!(
-                                "{:#?}",
-                                id.try_get().unwrap().borrow().data.borrow()
-                            ));
+                            debug.set(format!("{save:#?}"));
+
+                            *last_save2.borrow_mut() = save;
                         })) as ListenerEvent),
                     ) {
                         Ok(v) => v,
