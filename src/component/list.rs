@@ -92,10 +92,39 @@ fn show_popup(ctx: Context) -> Result<(), JsValue> {
 
                 // TODO: Allow for handling custom data.
 
-                let content: HtmlElement = document().create_element("span")?.unchecked_into();
+                let content: HtmlElement = document().create_element("p")?.unchecked_into();
                 content.class_list().add_1("content")?;
                 content.set_inner_text(&text_cont.content);
                 flagged_container.append_child(&content)?;
+
+                let footer = document().create_element("div")?;
+                footer.class_list().add_1("footer")?;
+                flagged_container.append_child(&footer)?;
+
+                match text_cont.flag {
+                    ComponentFlag::HIGHLIGHT => {
+                        let remove: HtmlElement =
+                            document().create_element("span")?.unchecked_into();
+                        remove.class_list().add_1("clickable")?;
+                        remove.set_inner_text("Remove");
+                        footer.append_child(&remove)?;
+                    }
+
+                    ComponentFlag::NOTE => {
+                        let remove: HtmlElement =
+                            document().create_element("span")?.unchecked_into();
+                        remove.class_list().add_1("clickable")?;
+                        remove.set_inner_text("Remove");
+                        footer.append_child(&remove)?;
+
+                        let edit: HtmlElement = document().create_element("span")?.unchecked_into();
+                        edit.class_list().add_1("clickable")?;
+                        edit.set_inner_text("Edit");
+                        footer.append_child(&edit)?;
+                    }
+
+                    _ => (),
+                }
 
                 notes_and_highlights.append_child(&flagged_container)?;
             }
