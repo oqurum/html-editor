@@ -63,13 +63,13 @@ pub fn get_all_text_nodes_in_container(
             }
 
             if *has_passed_go && container.node_type() == Node::TEXT_NODE {
-                log::info!("- {:?}", container.text_content());
+                // log::info!("- {:?}", container.text_content());
                 // TODO: Remove clone
                 nodes.push(container.clone().unchecked_into());
             }
 
             if &container == end_node {
-                log::info!("end");
+                // log::info!("end");
                 return true;
             }
 
