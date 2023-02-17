@@ -521,9 +521,13 @@ fn register_listener_events(
         let is_mouse_down = is_mouse_down.clone();
 
         let function = Closure::wrap(Box::new(move |_event: MouseEvent| {
-            *is_mouse_down.borrow_mut() = false;
+            let mut md = is_mouse_down.borrow_mut();
 
-            display_toolbar(&listener).unwrap_throw();
+            if *md {
+                display_toolbar(&listener).unwrap_throw();
+            }
+
+            *md = false;
         }) as Box<dyn Fn(MouseEvent)>);
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
