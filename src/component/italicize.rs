@@ -10,7 +10,7 @@ impl Component for Italicize {
 
     type Data = ();
 
-    fn on_click_button(&self, ctx: &Context) -> Result<()> {
+    fn on_click_button(&self, ctx: &Context<Self>) -> Result<()> {
         log::debug!("Italicize");
 
         ctx.nodes.borrow_mut().toggle_selection::<Self>()?;

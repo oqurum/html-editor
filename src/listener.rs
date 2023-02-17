@@ -605,25 +605,25 @@ fn handle_listener_mouseclick(
             }
         }
 
-        let ctx = Context {
-            nodes: Rc::new(RefCell::new(
-                selection::create_container(text_nodes, Rc::downgrade(&handle.data)).unwrap_throw(),
-            )),
-        };
+        let nodes = Rc::new(RefCell::new(
+            selection::create_container(text_nodes, Rc::downgrade(&handle.data)).unwrap_throw(),
+        ));
 
         // TODO: Improve
         for flag in flags.separate_bits() {
             match flag {
-                ComponentFlag::ITALICIZE => {
-                    crate::component::Italicize.on_click(&ctx).unwrap_throw()
-                }
-                ComponentFlag::HIGHLIGHT => {
-                    crate::component::Highlight.on_click(&ctx).unwrap_throw()
-                }
-                ComponentFlag::UNDERLINE => {
-                    crate::component::Underline.on_click(&ctx).unwrap_throw()
-                }
-                ComponentFlag::NOTE => crate::component::Note.on_click(&ctx).unwrap_throw(),
+                ComponentFlag::ITALICIZE => crate::component::Italicize
+                    .on_click(&Context::new(nodes.clone()))
+                    .unwrap_throw(),
+                ComponentFlag::HIGHLIGHT => crate::component::Highlight
+                    .on_click(&Context::new(nodes.clone()))
+                    .unwrap_throw(),
+                ComponentFlag::UNDERLINE => crate::component::Underline
+                    .on_click(&Context::new(nodes.clone()))
+                    .unwrap_throw(),
+                ComponentFlag::NOTE => crate::component::Note
+                    .on_click(&Context::new(nodes.clone()))
+                    .unwrap_throw(),
 
                 _ => unreachable!(),
             }

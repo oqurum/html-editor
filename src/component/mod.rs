@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cell::RefCell, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, marker::PhantomData, rc::Rc};
 
 use bitflags::bitflags;
 use gloo_utils::window;
@@ -22,7 +22,7 @@ use crate::{selection::NodeContainer, Result};
 
 pub static STYLING_PREFIX_CLASS: &str = "editor-styling";
 
-pub trait Component {
+pub trait Component: Sized {
     /// The Buttons' Title of the component.
     const TITLE: &'static str;
 
@@ -37,10 +37,10 @@ pub trait Component {
 
     type Data: ComponentData;
 
-    fn on_click_button(&self, ctx: &Context) -> Result<()>;
+    fn on_click_button(&self, ctx: &Context<Self>) -> Result<()>;
 
     /// If we've clicked text with the Component inside it.
-    fn on_click(&self, _ctx: &Context) -> Result<()> {
+    fn on_click(&self, _ctx: &Context<Self>) -> Result<()> {
         Ok(())
     }
 
@@ -99,17 +99,25 @@ impl ComponentDataStore {
     }
 }
 
-#[derive(Clone)]
-pub struct Context {
+pub struct Context<D: Component> {
     pub nodes: Rc<RefCell<NodeContainer>>,
+
+    _phantom: PhantomData<D>,
 }
 
-impl Context {
+impl<D: Component> Context<D> {
+    pub fn new(nodes: Rc<RefCell<NodeContainer>>) -> Self {
+        Self {
+            nodes,
+            _phantom: PhantomData::default(),
+        }
+    }
+
     pub fn reload_section(&self) -> Result<()> {
         self.nodes.borrow().reload_selection()
     }
 
-    pub fn store_data<D: Component, S: Serialize>(&self, value: &S) -> u32 {
+    pub fn store_data<S: Serialize>(&self, value: &S) -> u32 {
         self.nodes
             .borrow()
             .data
@@ -119,7 +127,7 @@ impl Context {
             .store_data(D::FLAG, value)
     }
 
-    pub fn get_data<D: Component>(&self, index: u32) -> ComponentDataStore {
+    pub fn get_data(&self, index: u32) -> ComponentDataStore {
         self.nodes
             .borrow()
             .data
@@ -129,7 +137,7 @@ impl Context {
             .get_data(D::FLAG, index)
     }
 
-    pub fn update_data<D: Component, S: Serialize>(&self, index: u32, value: &S) {
+    pub fn update_data<S: Serialize>(&self, index: u32, value: &S) {
         self.nodes
             .borrow()
             .data
@@ -139,7 +147,7 @@ impl Context {
             .update_data(D::FLAG, index, value);
     }
 
-    pub fn remove_data<D: Component>(&self, index: u32) {
+    pub fn remove_data(&self, index: u32) {
         self.nodes
             .borrow()
             .data
@@ -153,11 +161,11 @@ impl Context {
         self.nodes.borrow().get_selected_data_ids()
     }
 
-    pub fn insert_selection<D: Component>(&self, data: Option<u32>) -> Result<bool> {
+    pub fn insert_selection(&self, data: Option<u32>) -> Result<bool> {
         self.nodes.borrow_mut().insert_selection::<D>(data)
     }
 
-    pub fn remove_selection<D: Component>(&self, data: Option<u32>) -> Result<bool> {
+    pub fn remove_selection(&self, data: Option<u32>) -> Result<bool> {
         self.nodes.borrow_mut().remove_selection::<D>(data)
     }
 
@@ -181,6 +189,15 @@ impl Context {
             .listener_id;
 
         id.try_get().unwrap().borrow().on_event.borrow()(id);
+    }
+}
+
+impl<D: Component> Clone for Context<D> {
+    fn clone(&self) -> Self {
+        Self {
+            nodes: self.nodes.clone(),
+            _phantom: PhantomData::default(),
+        }
     }
 }
 

@@ -17,7 +17,7 @@ impl Component for List {
 
     type Data = ();
 
-    fn on_click_button(&self, ctx: &Context) -> Result<()> {
+    fn on_click_button(&self, ctx: &Context<Self>) -> Result<()> {
         log::debug!("List");
 
         show_popup(ctx.clone())?;
@@ -42,7 +42,7 @@ impl Popup {
     }
 }
 
-fn show_popup(ctx: Context) -> Result<(), JsValue> {
+fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
     let cancel_fn = Closure::once(|| {
         DISPLAYING.with(|popup| {
             popup.take().unwrap_throw().close();

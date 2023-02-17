@@ -146,12 +146,9 @@ impl Toolbar {
                     .unwrap_throw()
                     .filter(|v| !v.is_collapsed())
                 {
-                    let context = Context {
-                        nodes: Rc::new(RefCell::new(
-                            selection::get_nodes_in_selection(selection, data.clone())
-                                .unwrap_throw(),
-                        )),
-                    };
+                    let context = Context::new(Rc::new(RefCell::new(
+                        selection::get_nodes_in_selection(selection, data.clone()).unwrap_throw(),
+                    )));
 
                     component.on_click_button(&context).unwrap_throw();
 

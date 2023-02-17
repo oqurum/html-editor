@@ -21,7 +21,7 @@ impl Component for Note {
 
     type Data = ();
 
-    fn on_click_button(&self, ctx: &Context) -> Result<()> {
+    fn on_click_button(&self, ctx: &Context<Self>) -> Result<()> {
         log::debug!("Note - Selected {}", ctx.get_selection_data_ids().len());
 
         show_popup(None, ctx.clone())?;
@@ -29,7 +29,7 @@ impl Component for Note {
         Ok(())
     }
 
-    fn on_click(&self, ctx: &Context) -> Result<()> {
+    fn on_click(&self, ctx: &Context<Self>) -> Result<()> {
         log::info!("on_click");
 
         for (clicked_flag, id) in ctx.get_selection_data_ids() {
@@ -68,7 +68,7 @@ impl Popup {
     }
 }
 
-fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
+fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue> {
     let cancel_fn = Closure::once(|| {
         DISPLAYING.with(|popup| {
             popup.take().unwrap_throw().close();
@@ -82,8 +82,8 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
             DISPLAYING.with(move |popup| {
                 let popup = popup.take().unwrap_throw();
 
-                ctx.remove_selection::<Note>(editing_id).unwrap_throw();
-                ctx.remove_data::<Note>(editing_id.unwrap());
+                ctx.remove_selection(editing_id).unwrap_throw();
+                ctx.remove_data(editing_id.unwrap());
 
                 popup.close();
 
@@ -100,13 +100,13 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
                 let popup = popup.take().unwrap_throw();
 
                 if let Some(editing_id) = editing_id {
-                    ctx.update_data::<Note, _>(editing_id, &popup.value());
+                    ctx.update_data(editing_id, &popup.value());
                 } else {
                     ctx.reload_section().unwrap_throw();
-                    let data_pos = ctx.store_data::<Note, _>(&popup.value());
-                    if !ctx.insert_selection::<Note>(Some(data_pos)).unwrap_throw() {
+                    let data_pos = ctx.store_data(&popup.value());
+                    if !ctx.insert_selection(Some(data_pos)).unwrap_throw() {
                         // Remove Inserted data if we're unable to insert
-                        ctx.remove_data::<Note>(data_pos);
+                        ctx.remove_data(data_pos);
                     }
                 }
 
@@ -148,7 +148,7 @@ fn show_popup(editing_id: Option<u32>, ctx: Context) -> Result<(), JsValue> {
         body.append_child(&text_area)?;
 
         if let Some(editing_id) = editing_id {
-            text_area.set_value(&ctx.get_data::<Note>(editing_id).parse::<String>())
+            text_area.set_value(&ctx.get_data(editing_id).parse::<String>())
         }
 
         text_area
