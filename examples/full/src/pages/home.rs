@@ -31,7 +31,7 @@ pub fn home() -> Html {
 
             let handle = editor::register(
                 node.cast::<HtmlElement>().unwrap_throw(),
-                MouseListener::Ignore,
+                MouseListener::All,
                 Some(Rc::new(RefCell::new(move |id: ListenerId| {
                     let save = id.try_save();
                     // log::debug!("{:#?}", save);
@@ -90,7 +90,7 @@ pub fn home() -> Html {
                     let handle = match load_and_register(
                         node.cast::<HtmlElement>().unwrap_throw(),
                         v.clone(),
-                        MouseListener::Ignore,
+                        MouseListener::All,
                         Some(Rc::new(RefCell::new(move |id: ListenerId| {
                             let save = id.try_save();
                             // log::debug!("{:#?}", save);
