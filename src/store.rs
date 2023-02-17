@@ -79,13 +79,23 @@ impl SaveState {
                     curr_node = node;
                 }
 
+                // If it contains length (all of them should unless its' selecting until end of Node)
+                // We'll split it, set tag empty, and increase offset since out current node will now be the split node.
+                if let Some(length) = text_split.length {
+                    curr_node = list_node.split_node(&curr_node, length)?;
+                    list_node.set_flag_for_node(&curr_node, FlagsWithData::empty())?;
+
+                    text_offset += length;
+                }
+
                 text_offset += text_split.offset;
             }
 
-            list_node.add_flag_to_node(
-                &curr_node,
-                FlagsWithData::from_singles(&saved_node.flags[0].flags),
-            )?;
+            // TODO: Determine why I was utilizing this.
+            // list_node.add_flag_to_node(
+            //     &curr_node,
+            //     FlagsWithData::from_singles(&saved_node.flags[0].flags),
+            // )?;
         }
 
         Ok(listener)
@@ -104,13 +114,23 @@ impl SavedNode {
     pub(crate) fn from_node(index: usize, components: &[WrappedText]) -> Self {
         Self {
             index,
-            flags: components
-                .iter()
-                .map(|v| SavedNodeFlag {
-                    offset: v.offset,
-                    flags: v.flag.into_singles_vec(),
-                })
-                .collect(),
+            flags: {
+                let mut flags = Vec::new();
+
+                for i in 0..components.len() {
+                    let comp = &components[i];
+
+                    if !comp.are_flags_empty() {
+                        flags.push(SavedNodeFlag {
+                            offset: comp.offset,
+                            length: components.get(i + 1).map(|v| v.offset - comp.offset),
+                            flags: comp.flag.into_singles_vec(),
+                        })
+                    }
+                }
+
+                flags
+            },
         }
     }
 }
@@ -118,6 +138,7 @@ impl SavedNode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedNodeFlag {
     offset: u32,
+    length: Option<u32>,
     // TODO: Should I change to vec with SingleFlagWithData?
     flags: Vec<SingleFlagWithData>,
 }

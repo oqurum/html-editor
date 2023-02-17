@@ -111,6 +111,8 @@ impl TextContainer {
     }
 
     /// Splits and inserts the new ComponentNode in the correct position in the array.
+    ///
+    /// Returns the new, split node.
     pub fn split_node(&mut self, node: &Text, index: u32) -> Result<Text> {
         for (i, item) in self.text.iter().enumerate() {
             if &item.node == node {
