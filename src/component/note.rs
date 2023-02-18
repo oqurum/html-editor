@@ -147,6 +147,8 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
 
         let text_area: HtmlTextAreaElement =
             document().create_element("textarea")?.unchecked_into();
+        text_area.set_max_length(500);
+        text_area.set_spellcheck(true);
         body.append_child(&text_area)?;
 
         if let Some(editing_id) = editing_id {
