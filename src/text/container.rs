@@ -193,11 +193,13 @@ impl<'a> std::ops::DerefMut for FoundWrappedTextRefMut<'a> {
 
 /// Find and join Component Nodes' of the same type.
 ///
-/// Updates the
+/// This function will recursively call itself until no more nodes can be joined.
 fn try_join_component_into_surroundings(
     mut index: usize,
     nodes: &mut Vec<WrappedText>,
 ) -> Result<()> {
+    let mut joined = false;
+
     // Compare current and previous component.
     if index != 0 && nodes[index].flag == nodes[index - 1].flag {
         let curr = nodes.remove(index);
@@ -205,6 +207,8 @@ fn try_join_component_into_surroundings(
         nodes[index - 1].join(curr)?;
 
         index -= 1;
+
+        joined = true;
     }
 
     // Compare current and next component.
@@ -212,7 +216,13 @@ fn try_join_component_into_surroundings(
         let next = nodes.remove(index + 1);
 
         nodes[index].join(next)?;
+
+        joined = true;
     }
 
-    Ok(())
+    if joined {
+        try_join_component_into_surroundings(index, nodes)
+    } else {
+        Ok(())
+    }
 }
