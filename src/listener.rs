@@ -420,7 +420,7 @@ pub fn register_with_data(
 
         data.listener_id = index;
         let listener_data = Rc::new(RefCell::new(data));
-        let toolbar = Toolbar::new(index, Rc::downgrade(&listener_data), &on_event)?;
+        let toolbar = Toolbar::new(index, Rc::downgrade(&listener_data), &on_event);
 
         // Add class to container element
         element.class_list().add_1(&listener_class)?;
@@ -472,7 +472,7 @@ pub fn register(
         let nodes = return_all_text_nodes(&element);
 
         let listener_data = Rc::new(RefCell::new(ListenerData::new(listener_id, nodes)?));
-        let toolbar = Toolbar::new(listener_id, Rc::downgrade(&listener_data), &on_event)?;
+        let toolbar = Toolbar::new(listener_id, Rc::downgrade(&listener_data), &on_event);
 
         // Add class to container element
         element.class_list().add_1(&listener_class)?;

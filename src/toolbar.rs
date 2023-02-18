@@ -15,32 +15,26 @@ use crate::{
 };
 
 pub struct Toolbar {
-    pub popup: HtmlElement,
+    pub popup: Option<HtmlElement>,
     listeners: Vec<ElementEvent>,
 
     listener_id: ListenerId,
     data: SharedListenerData,
+    func: ListenerEvent,
 
     buttons: Vec<Button>,
 }
 
 impl Toolbar {
-    pub fn new(
-        listener_id: ListenerId,
-        data: SharedListenerData,
-        func: &ListenerEvent,
-    ) -> Result<Self> {
-        let mut this = Self {
-            popup: document().create_element("div")?.unchecked_into(),
+    pub fn new(listener_id: ListenerId, data: SharedListenerData, func: &ListenerEvent) -> Self {
+        Self {
+            data,
+            listener_id,
+            popup: None,
             buttons: Vec::new(),
             listeners: Vec::new(),
-            data: data.clone(),
-            listener_id,
-        };
-
-        this.create_popup(data, func)?;
-
-        Ok(this)
+            func: func.clone(),
+        }
     }
 
     pub fn open(&mut self, selection: Selection) -> Result<()> {
@@ -48,36 +42,34 @@ impl Toolbar {
         let bb = range.get_bounding_client_rect();
         let (x, y, selected_width) = (bb.x(), bb.y(), bb.width());
 
-        let node_sel =
-            selection::get_nodes_in_selection(selection, self.data.clone()).unwrap_throw();
-        let selected = node_sel.get_selected_data_ids();
-
         const HEIGHT: f64 = 30.0;
 
         self.close();
 
-        for button in &self.buttons {
-            button.set_selected(selected.iter().any(|&(f, _)| f == button.type_of))?;
+        self.create_popup()?;
+
+        if let Some(popup) = self.popup.as_ref() {
+            let style = popup.style();
+
+            style.set_property("left", &format!("{}px", x + selected_width / 2.0,))?;
+
+            style.set_property("top", &format!("{}px", y - HEIGHT - 3.0,))?;
+
+            document().body().unwrap_throw().append_child(popup)?;
         }
-
-        let style = self.popup.style();
-
-        style.set_property("left", &format!("{}px", x + selected_width / 2.0,))?;
-
-        style.set_property("top", &format!("{}px", y - HEIGHT - 3.0,))?;
-
-        document().body().unwrap_throw().append_child(&self.popup)?;
 
         Ok(())
     }
 
     pub fn close(&mut self) {
-        self.popup.remove();
+        if let Some(popup) = self.popup.take() {
+            popup.remove();
+        }
     }
 
-    fn create_popup(&mut self, data: SharedListenerData, func: &ListenerEvent) -> Result<()> {
-        let element = &self.popup;
-        element.set_class_name("toolbar");
+    fn create_popup(&mut self) -> Result<()> {
+        let popup_element: HtmlElement = document().create_element("div")?.unchecked_into();
+        popup_element.set_class_name("toolbar");
 
         self.listeners.clear();
 
@@ -93,7 +85,7 @@ impl Toolbar {
             }) as Box<dyn Fn(MouseEvent)>);
 
             self.listeners.push(ElementEvent::link(
-                element.clone().unchecked_into(),
+                popup_element.clone().unchecked_into(),
                 function,
                 |t, f| t.add_event_listener_with_callback("mousedown", f),
                 Box::new(|t, f| t.remove_event_listener_with_callback("mousedown", f)),
@@ -103,16 +95,16 @@ impl Toolbar {
         // Create the mouse up listener
         {
             let listener_id = self.listener_id;
-            let func = func.clone();
+            let func = self.func.clone();
+            let data = self.data.clone();
 
             let function = Closure::wrap(Box::new(move |e: MouseEvent| {
                 let click_element: HtmlElement = e.target_unchecked_into();
+                let is_held = Utc::now().signed_duration_since(*last_clicked.borrow())
+                    >= Duration::milliseconds(500);
 
-                if Utc::now().signed_duration_since(*last_clicked.borrow())
-                    >= Duration::milliseconds(500)
-                {
-                    // TODO
-                } else if let Some(selection) = document()
+                // Get the selection
+                if let Some(selection) = document()
                     .get_selection()
                     .unwrap_throw()
                     .filter(|v| !v.is_collapsed())
@@ -130,30 +122,51 @@ impl Toolbar {
                                     ComponentFlag::HIGHLIGHT => {
                                         drop(borrow);
 
-                                        let context = Context::new(Rc::new(RefCell::new(
-                                            selection::get_nodes_in_selection(
-                                                selection,
-                                                data.clone(),
-                                            )
-                                            .unwrap_throw(),
-                                        )));
-                                        Highlight.on_click_button(&context).unwrap_throw();
+                                        if is_held {
+                                            // TODO
+                                        } else {
+                                            let context = Context::new(Rc::new(RefCell::new(
+                                                selection::get_nodes_in_selection(
+                                                    selection.clone(),
+                                                    data.clone(),
+                                                )
+                                                .unwrap_throw(),
+                                            )));
+
+                                            Highlight.on_click_button(&context).unwrap_throw();
+                                        }
                                     }
 
                                     ComponentFlag::NOTE => {
                                         drop(borrow);
 
-                                        let context = Context::new(Rc::new(RefCell::new(
-                                            selection::get_nodes_in_selection(
-                                                selection,
-                                                data.clone(),
-                                            )
-                                            .unwrap_throw(),
-                                        )));
-                                        Note.on_click_button(&context).unwrap_throw();
+                                        if is_held {
+                                            // TODO
+                                        } else {
+                                            let context = Context::new(Rc::new(RefCell::new(
+                                                selection::get_nodes_in_selection(
+                                                    selection.clone(),
+                                                    data.clone(),
+                                                )
+                                                .unwrap_throw(),
+                                            )));
+
+                                            Note.on_click_button(&context).unwrap_throw();
+                                        }
                                     }
 
                                     _ => (),
+                                }
+
+                                // Reload the toolbar
+                                {
+                                    let listener = listener_id.try_get().unwrap();
+                                    let mut borrow = listener.borrow_mut();
+
+                                    borrow.toolbar.close();
+                                    if let Err(e) = borrow.toolbar.open(selection) {
+                                        log::error!("Failed to open toolbar: {e:?}");
+                                    }
                                 }
 
                                 break;
@@ -166,34 +179,54 @@ impl Toolbar {
             }) as Box<dyn Fn(MouseEvent)>);
 
             self.listeners.push(ElementEvent::link(
-                element.clone().unchecked_into(),
+                popup_element.clone().unchecked_into(),
                 function,
                 |t, f| t.add_event_listener_with_callback("mouseup", f),
                 Box::new(|t, f| t.remove_event_listener_with_callback("mouseup", f)),
             ));
         }
 
-        self.create_button::<Highlight>()?;
-        self.create_button::<Note>()?;
-        self.create_button::<List>()?;
-        // self.create_button(Underline, data.clone(), func.clone())?;
-        // self.create_button(Italicize, data.clone(), func.clone())?;
+        self.popup = Some(popup_element);
+
+        let selected = if let Some(selection) = document()
+            .get_selection()
+            .unwrap_throw()
+            .filter(|v| !v.is_collapsed())
+        {
+            let node_sel =
+                selection::get_nodes_in_selection(selection, self.data.clone()).unwrap_throw();
+            node_sel
+                .get_selected_data_ids()
+                .into_iter()
+                .map(|(v, _)| v)
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        self.create_button::<Highlight>(&selected)?;
+        self.create_button::<Note>(&selected)?;
+        self.create_button::<List>(&selected)?;
 
         Ok(())
     }
 
-    fn create_button<C: Component + 'static>(&mut self) -> Result<()> {
+    fn create_button<C: Component + 'static>(&mut self, selected: &[ComponentFlag]) -> Result<()> {
         let element: HtmlElement = document().create_element("div")?.unchecked_into();
 
         element.set_inner_text(C::TITLE);
         element.set_class_name("button");
 
-        self.popup.append_child(&element)?;
+        self.popup.as_ref().unwrap().append_child(&element)?;
 
-        self.buttons.push(Button {
+        let button = Button {
             element,
             type_of: C::FLAG,
-        });
+        };
+
+        button.set_selected(selected.iter().any(|&f| f == button.type_of))?;
+
+        self.buttons.push(button);
 
         Ok(())
     }
