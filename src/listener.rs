@@ -228,7 +228,7 @@ pub struct Listener {
 
     pub data: Rc<RefCell<ListenerData>>,
 
-    toolbar: Toolbar,
+    pub(crate) toolbar: Toolbar,
 }
 
 /// Keeps the listener active until we're dropped.

@@ -7,6 +7,7 @@ use web_sys::{HtmlElement, MouseEvent, Selection};
 
 use crate::{
     component::{Component, Context, Highlight, List, Note},
+    helper::{parents_contains_element, TargetCast},
     listener::{ListenerEvent, SharedListenerData},
     selection,
     util::ElementEvent,
@@ -15,7 +16,7 @@ use crate::{
 
 pub struct Toolbar {
     pub popup: HtmlElement,
-    mouse_down_listener: Option<Closure<dyn Fn(MouseEvent)>>,
+    listeners: Vec<ElementEvent>,
 
     listener_id: ListenerId,
     data: SharedListenerData,
@@ -32,7 +33,7 @@ impl Toolbar {
         let mut this = Self {
             popup: document().create_element("div")?.unchecked_into(),
             buttons: Vec::new(),
-            mouse_down_listener: None,
+            listeners: Vec::new(),
             data: data.clone(),
             listener_id,
         };
@@ -78,55 +79,20 @@ impl Toolbar {
         let element = &self.popup;
         element.set_class_name("toolbar");
 
-        // Ignore Mouse Down Event
-        let ignore_mouse_down = Closure::wrap(Box::new(move |e: MouseEvent| {
-            e.prevent_default();
-        }) as Box<dyn Fn(MouseEvent)>);
-
-        element.add_event_listener_with_callback(
-            "mousedown",
-            ignore_mouse_down.as_ref().unchecked_ref(),
-        )?;
-
-        self.mouse_down_listener = Some(ignore_mouse_down);
-
-        self.create_button(Highlight, data.clone(), func.clone())?;
-        self.create_button(Note, data.clone(), func.clone())?;
-        self.create_button(List, data, func.clone())?;
-        // self.create_button(Underline, data.clone(), func.clone())?;
-        // self.create_button(Italicize, data.clone(), func.clone())?;
-
-        Ok(())
-    }
-
-    fn create_button<C: Component + 'static>(
-        &mut self,
-        component: C,
-        data: SharedListenerData,
-        func: ListenerEvent,
-    ) -> Result<()> {
-        let listener_id = self.listener_id;
-
-        let element: HtmlElement = document().create_element("div")?.unchecked_into();
-
-        element.set_inner_text(C::TITLE);
-        element.set_class_name("button");
-
-        self.popup.append_child(&element)?;
+        self.listeners.clear();
 
         let last_clicked = Rc::new(RefCell::new(Utc::now()));
-
-        let mut events = Vec::new();
 
         // Create the mouse down listener
         {
             let last_clicked = last_clicked.clone();
 
-            let function = Closure::wrap(Box::new(move |_event: MouseEvent| {
+            let function = Closure::wrap(Box::new(move |e: MouseEvent| {
+                e.prevent_default();
                 *last_clicked.borrow_mut() = Utc::now();
             }) as Box<dyn Fn(MouseEvent)>);
 
-            events.push(ElementEvent::link(
+            self.listeners.push(ElementEvent::link(
                 element.clone().unchecked_into(),
                 function,
                 |t, f| t.add_event_listener_with_callback("mousedown", f),
@@ -136,7 +102,12 @@ impl Toolbar {
 
         // Create the mouse up listener
         {
-            let function = Closure::wrap(Box::new(move || {
+            let listener_id = self.listener_id;
+            let func = func.clone();
+
+            let function = Closure::wrap(Box::new(move |e: MouseEvent| {
+                let click_element: HtmlElement = e.target_unchecked_into();
+
                 if Utc::now().signed_duration_since(*last_clicked.borrow())
                     >= Duration::milliseconds(500)
                 {
@@ -146,17 +117,55 @@ impl Toolbar {
                     .unwrap_throw()
                     .filter(|v| !v.is_collapsed())
                 {
-                    let context = Context::new(Rc::new(RefCell::new(
-                        selection::get_nodes_in_selection(selection, data.clone()).unwrap_throw(),
-                    )));
+                    {
+                        let listener = listener_id.try_get().unwrap();
+                        let borrow = listener.borrow();
 
-                    component.on_click_button(&context).unwrap_throw();
+                        for button in &borrow.toolbar.buttons {
+                            if parents_contains_element(
+                                click_element.unchecked_ref(),
+                                &button.element,
+                            ) {
+                                match button.type_of {
+                                    ComponentFlag::HIGHLIGHT => {
+                                        drop(borrow);
+
+                                        let context = Context::new(Rc::new(RefCell::new(
+                                            selection::get_nodes_in_selection(
+                                                selection,
+                                                data.clone(),
+                                            )
+                                            .unwrap_throw(),
+                                        )));
+                                        Highlight.on_click_button(&context).unwrap_throw();
+                                    }
+
+                                    ComponentFlag::NOTE => {
+                                        drop(borrow);
+
+                                        let context = Context::new(Rc::new(RefCell::new(
+                                            selection::get_nodes_in_selection(
+                                                selection,
+                                                data.clone(),
+                                            )
+                                            .unwrap_throw(),
+                                        )));
+                                        Note.on_click_button(&context).unwrap_throw();
+                                    }
+
+                                    _ => (),
+                                }
+
+                                break;
+                            }
+                        }
+                    }
 
                     (func.borrow_mut())(listener_id);
                 }
-            }) as Box<dyn Fn()>);
+            }) as Box<dyn Fn(MouseEvent)>);
 
-            events.push(ElementEvent::link(
+            self.listeners.push(ElementEvent::link(
                 element.clone().unchecked_into(),
                 function,
                 |t, f| t.add_event_listener_with_callback("mouseup", f),
@@ -164,9 +173,25 @@ impl Toolbar {
             ));
         }
 
+        self.create_button::<Highlight>()?;
+        self.create_button::<Note>()?;
+        self.create_button::<List>()?;
+        // self.create_button(Underline, data.clone(), func.clone())?;
+        // self.create_button(Italicize, data.clone(), func.clone())?;
+
+        Ok(())
+    }
+
+    fn create_button<C: Component + 'static>(&mut self) -> Result<()> {
+        let element: HtmlElement = document().create_element("div")?.unchecked_into();
+
+        element.set_inner_text(C::TITLE);
+        element.set_class_name("button");
+
+        self.popup.append_child(&element)?;
+
         self.buttons.push(Button {
             element,
-            events,
             type_of: C::FLAG,
         });
 
@@ -174,11 +199,9 @@ impl Toolbar {
     }
 }
 
-#[allow(dead_code)]
 pub struct Button {
     type_of: ComponentFlag,
     element: HtmlElement,
-    events: Vec<ElementEvent>,
 }
 
 impl Button {
@@ -194,5 +217,11 @@ impl Button {
         }
 
         Ok(())
+    }
+}
+
+impl Drop for Button {
+    fn drop(&mut self) {
+        self.element.remove();
     }
 }

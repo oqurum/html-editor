@@ -11,6 +11,16 @@ pub fn parents_contains_class(element: Element, class: &str) -> bool {
     }
 }
 
+pub fn parents_contains_element(element: &Element, other: &Element) -> bool {
+    if element == other {
+        true
+    } else if let Some(parent) = element.parent_element() {
+        parents_contains_element(&parent, other)
+    } else {
+        false
+    }
+}
+
 // Copied from YEW
 pub trait TargetCast
 where
