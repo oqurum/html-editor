@@ -2,9 +2,9 @@ use std::cell::RefCell;
 
 use gloo_utils::{body, document};
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt};
-use web_sys::{Element, HtmlElement, HtmlTextAreaElement};
+use web_sys::{Element, HtmlElement, HtmlTextAreaElement, MouseEvent};
 
-use crate::{ComponentFlag, Result};
+use crate::{helper::TargetCast, ComponentFlag, Result};
 
 use super::{Component, Context};
 
@@ -50,9 +50,8 @@ thread_local! {
 
 #[allow(dead_code)]
 struct Popup {
-    cancel_fn: Closure<dyn FnMut()>,
-    delete_fn: Closure<dyn FnMut()>,
-    save_fn: Closure<dyn FnMut()>,
+    events: Vec<Closure<dyn FnMut()>>,
+    close_popup_fn: Closure<dyn FnMut(MouseEvent)>,
 
     text_area: HtmlTextAreaElement,
     content: Element,
@@ -60,6 +59,12 @@ struct Popup {
 
 impl Popup {
     pub fn close(self) {
+        self.content
+            .remove_event_listener_with_callback(
+                "click",
+                self.close_popup_fn.as_ref().unchecked_ref(),
+            )
+            .unwrap_throw();
         self.content.remove();
     }
 
@@ -69,6 +74,17 @@ impl Popup {
 }
 
 fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue> {
+    let close_popup_fn = Closure::new(|e: MouseEvent| {
+        if e.target_unchecked_into::<HtmlElement>()
+            .class_list()
+            .contains("popup")
+        {
+            DISPLAYING.with(|popup| {
+                popup.take().unwrap_throw().close();
+            });
+        }
+    });
+
     let cancel_fn = Closure::once(|| {
         DISPLAYING.with(|popup| {
             popup.take().unwrap_throw().close();
@@ -121,6 +137,7 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
 
     let content = document().create_element("div")?;
     content.class_list().add_1("popup")?;
+    content.add_event_listener_with_callback("click", close_popup_fn.as_ref().unchecked_ref())?;
 
     let inner = document().create_element("div")?;
     inner.class_list().add_1("popup-container")?;
@@ -189,9 +206,8 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
     body().append_child(&content)?;
 
     let popup = Popup {
-        cancel_fn,
-        delete_fn,
-        save_fn,
+        events: vec![cancel_fn, delete_fn, save_fn],
+        close_popup_fn,
 
         text_area,
         content,
