@@ -4,7 +4,7 @@ use gloo_utils::{body, document};
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt};
 use web_sys::{Element, HtmlElement, HtmlTextAreaElement, MouseEvent};
 
-use crate::{helper::TargetCast, ComponentFlag, Result};
+use crate::{helper::TargetCast, util::ElementEvent, ComponentFlag, Result};
 
 use super::{Component, Context};
 
@@ -50,8 +50,7 @@ thread_local! {
 
 #[allow(dead_code)]
 struct Popup {
-    events: Vec<Closure<dyn FnMut()>>,
-    close_popup_fn: Closure<dyn FnMut(MouseEvent)>,
+    events: Vec<ElementEvent>,
 
     text_area: HtmlTextAreaElement,
     content: Element,
@@ -59,12 +58,6 @@ struct Popup {
 
 impl Popup {
     pub fn close(self) {
-        self.content
-            .remove_event_listener_with_callback(
-                "click",
-                self.close_popup_fn.as_ref().unchecked_ref(),
-            )
-            .unwrap_throw();
         self.content.remove();
     }
 
@@ -74,22 +67,30 @@ impl Popup {
 }
 
 fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue> {
-    let close_popup_fn = Closure::new(|e: MouseEvent| {
+    let close_popup_fn: Closure<dyn FnMut(MouseEvent)> = Closure::new(|e: MouseEvent| {
         if e.target_unchecked_into::<HtmlElement>()
             .class_list()
             .contains("popup")
         {
+            // Stop propagation so we don't open the popup again
+            e.stop_propagation();
+
             DISPLAYING.with(|popup| {
                 popup.take().unwrap_throw().close();
             });
         }
     });
 
-    let cancel_fn = Closure::once(|| {
-        DISPLAYING.with(|popup| {
-            popup.take().unwrap_throw().close();
-        });
-    });
+    let cancel_fn = || {
+        Closure::new(|e: MouseEvent| {
+            // Stop propagation so we don't open the popup again
+            e.stop_propagation();
+
+            DISPLAYING.with(|popup| {
+                popup.take().unwrap_throw().close();
+            });
+        }) as Closure<dyn FnMut(MouseEvent)>
+    };
 
     let delete_fn = {
         let ctx = ctx.clone();
@@ -135,9 +136,16 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
         })
     };
 
+    let mut element_events = Vec::new();
+
     let content = document().create_element("div")?;
     content.class_list().add_1("popup")?;
-    content.add_event_listener_with_callback("click", close_popup_fn.as_ref().unchecked_ref())?;
+    element_events.push(ElementEvent::link(
+        content.clone().unchecked_into(),
+        close_popup_fn,
+        |t, f| t.add_event_listener_with_callback("click", f),
+        Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+    ));
 
     let inner = document().create_element("div")?;
     inner.class_list().add_1("popup-container")?;
@@ -154,7 +162,12 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
         let cancel: HtmlElement = document().create_element("span")?.unchecked_into();
         cancel.set_inner_text("X");
         header.append_child(&cancel)?;
-        cancel.add_event_listener_with_callback("click", cancel_fn.as_ref().unchecked_ref())?;
+        element_events.push(ElementEvent::link(
+            cancel.unchecked_into(),
+            cancel_fn(),
+            |t, f| t.add_event_listener_with_callback("click", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+        ));
     }
 
     let text_area = {
@@ -183,19 +196,34 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
         let save: HtmlElement = document().create_element("button")?.unchecked_into();
         save.set_inner_text("Save");
         footer.append_child(&save)?;
-        save.add_event_listener_with_callback("click", save_fn.as_ref().unchecked_ref())?;
+        element_events.push(ElementEvent::link(
+            save.unchecked_into(),
+            save_fn,
+            |t, f| t.add_event_listener_with_callback("click", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+        ));
 
         let cancel: HtmlElement = document().create_element("button")?.unchecked_into();
         cancel.set_inner_text("Cancel");
         footer.append_child(&cancel)?;
-        cancel.add_event_listener_with_callback("click", cancel_fn.as_ref().unchecked_ref())?;
+        element_events.push(ElementEvent::link(
+            cancel.unchecked_into(),
+            cancel_fn(),
+            |t, f| t.add_event_listener_with_callback("click", f),
+            Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+        ));
 
         let delete: HtmlElement = document().create_element("button")?.unchecked_into();
         delete.set_inner_text("Delete");
         footer.append_child(&delete)?;
 
         if editing_id.is_some() {
-            delete.add_event_listener_with_callback("click", delete_fn.as_ref().unchecked_ref())?;
+            element_events.push(ElementEvent::link(
+                delete.unchecked_into(),
+                delete_fn,
+                |t, f| t.add_event_listener_with_callback("click", f),
+                Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
+            ));
         } else {
             delete.set_attribute("disabled", "true")?;
         }
@@ -206,8 +234,7 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
     body().append_child(&content)?;
 
     let popup = Popup {
-        events: vec![cancel_fn, delete_fn, save_fn],
-        close_popup_fn,
+        events: element_events,
 
         text_area,
         content,

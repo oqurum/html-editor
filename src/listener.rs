@@ -235,13 +235,22 @@ pub struct Listener {
 pub struct ListenerHandle(ListenerId);
 
 impl ListenerHandle {
+    /// Selects a word from the point you clicked and will also call `on_click` for a component.
+    pub fn click_or_select(&self, event: MouseEvent) -> Result<()> {
+        let (x, y) = (event.client_x() as f32, event.client_y() as f32);
+
+        let Some(listener) = self.0.try_get() else {
+            log::debug!("Unable to acquire listener. Does it still exist?");
+            return Ok(());
+        };
+
+        handle_listener_mouseclick(event, &self.0.to_class_string(), &Rc::downgrade(&listener))?;
+
+        self.select_word_from_point(x, y, &gloo_utils::document())
+    }
+
     /// Highlights' the word you clicked and opens the toolbar.
-    pub fn select_word_from_point(
-        &self,
-        x: f32,
-        y: f32,
-        document: &Document,
-    ) -> Result<(), JsValue> {
+    fn select_word_from_point(&self, x: f32, y: f32, document: &Document) -> Result<(), JsValue> {
         fn is_stop_break(value: &u8) -> bool {
             [
                 b' ', b'.', b',', b'?', b'!', b'"', b'\'', b'*', b'(', b')', b';', b':',
@@ -594,6 +603,7 @@ fn handle_listener_mouseclick(
         let mut inside = event.target_unchecked_into::<Element>().first_child();
 
         // TODO: Improve
+        // Retrieve all text nodes inside the element we clicked on
         while let Some(container) = inside {
             inside = container.next_sibling();
 
