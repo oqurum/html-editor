@@ -240,15 +240,13 @@ impl ListenerHandle {
     }
 
     /// Selects a word from the point you clicked and will also call `on_click` for a component.
-    pub fn click_or_select(&self, event: MouseEvent) -> Result<()> {
-        let (x, y) = (event.client_x() as f32, event.client_y() as f32);
-
+    pub fn click_or_select(&self, x: f32, y: f32, target: Element) -> Result<()> {
         let Some(listener) = self.0.try_get() else {
             log::debug!("Unable to acquire listener. Does it still exist?");
             return Ok(());
         };
 
-        handle_listener_mouseclick(event, &self.0.to_class_string(), &Rc::downgrade(&listener))?;
+        handle_listener_mouseclick(target, &self.0.to_class_string(), &Rc::downgrade(&listener))?;
 
         self.select_word_from_point(x, y, &gloo_utils::document())
     }
@@ -579,7 +577,8 @@ fn register_listener_events(
     {
         let listener = Rc::downgrade(listener_rc);
         let function: Closure<dyn FnMut(MouseEvent)> = Closure::new(move |event: MouseEvent| {
-            handle_listener_mouseclick(event, &listener_class, &listener).unwrap_throw();
+            handle_listener_mouseclick(event.target_unchecked_into(), &listener_class, &listener)
+                .unwrap_throw();
         });
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
@@ -594,11 +593,11 @@ fn register_listener_events(
 }
 
 fn handle_listener_mouseclick(
-    event: MouseEvent,
+    target: Element,
     listening_class: &str,
     handler: &Weak<RefCell<Listener>>,
 ) -> Result<()> {
-    if !parents_contains_class(event.target_unchecked_into(), listening_class) {
+    if !parents_contains_class(target.clone(), listening_class) {
         return Ok(());
     }
 
@@ -610,7 +609,7 @@ fn handle_listener_mouseclick(
         let mut flags = ComponentFlag::empty();
 
         let mut text_nodes = Vec::new();
-        let mut inside = event.target_unchecked_into::<Element>().first_child();
+        let mut inside = target.first_child();
 
         // TODO: Improve
         // Retrieve all text nodes inside the element we clicked on
