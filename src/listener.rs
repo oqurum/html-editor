@@ -235,6 +235,10 @@ pub struct Listener {
 pub struct ListenerHandle(ListenerId);
 
 impl ListenerHandle {
+    pub fn unset() -> Self {
+        Self(ListenerId::unset())
+    }
+
     /// Selects a word from the point you clicked and will also call `on_click` for a component.
     pub fn click_or_select(&self, event: MouseEvent) -> Result<()> {
         let (x, y) = (event.client_x() as f32, event.client_y() as f32);
@@ -368,6 +372,12 @@ impl ListenerHandle {
         display_toolbar(&handler)?;
 
         Ok(())
+    }
+}
+
+impl Default for ListenerHandle {
+    fn default() -> Self {
+        Self::unset()
     }
 }
 
