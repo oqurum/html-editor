@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use gloo_utils::{body, document};
+use gloo_utils::body;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt};
 use web_sys::{Element, HtmlElement};
 
@@ -49,33 +49,33 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
         });
     });
 
-    let content = document().create_element("div")?;
+    let content = ctx.document.create_element("div")?;
     content.class_list().add_1("popup")?;
 
-    let inner = document().create_element("div")?;
+    let inner = ctx.document.create_element("div")?;
     inner.class_list().add_1("popup-container")?;
 
     {
-        let header = document().create_element("div")?;
+        let header = ctx.document.create_element("div")?;
         header.class_list().add_1("popup-header")?;
         inner.append_child(&header)?;
 
-        let title: HtmlElement = document().create_element("h3")?.unchecked_into();
+        let title: HtmlElement = ctx.document.create_element("h3")?.unchecked_into();
         title.set_inner_text("List");
         header.append_child(&title)?;
 
-        let cancel: HtmlElement = document().create_element("span")?.unchecked_into();
+        let cancel: HtmlElement = ctx.document.create_element("span")?.unchecked_into();
         cancel.set_inner_text("X");
         header.append_child(&cancel)?;
         cancel.add_event_listener_with_callback("click", cancel_fn.as_ref().unchecked_ref())?;
     }
 
     {
-        let body = document().create_element("div")?;
+        let body = ctx.document.create_element("div")?;
         body.class_list().add_1("popup-body")?;
         inner.append_child(&body)?;
 
-        let notes_and_highlights = document().create_element("div")?;
+        let notes_and_highlights = ctx.document.create_element("div")?;
         body.append_child(&notes_and_highlights)?;
 
         // Notes and Highlights (X)
@@ -87,24 +87,24 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
 
             for text_cont in data.get_flagged_text() {
                 let flagged_container: HtmlElement =
-                    document().create_element("div")?.unchecked_into();
+                    ctx.document.create_element("div")?.unchecked_into();
                 flagged_container.class_list().add_1("flagged-item")?;
 
                 // TODO: Allow for handling custom data.
 
-                let content: HtmlElement = document().create_element("p")?.unchecked_into();
+                let content: HtmlElement = ctx.document.create_element("p")?.unchecked_into();
                 content.class_list().add_1("content")?;
                 content.set_inner_text(&text_cont.content);
                 flagged_container.append_child(&content)?;
 
-                let footer = document().create_element("div")?;
+                let footer = ctx.document.create_element("div")?;
                 footer.class_list().add_1("footer")?;
                 flagged_container.append_child(&footer)?;
 
                 match text_cont.flag {
                     ComponentFlag::HIGHLIGHT => {
                         let remove: HtmlElement =
-                            document().create_element("span")?.unchecked_into();
+                            ctx.document.create_element("span")?.unchecked_into();
                         remove.class_list().add_1("clickable")?;
                         remove.set_inner_text("Remove");
                         footer.append_child(&remove)?;
@@ -112,12 +112,13 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
 
                     ComponentFlag::NOTE => {
                         let remove: HtmlElement =
-                            document().create_element("span")?.unchecked_into();
+                            ctx.document.create_element("span")?.unchecked_into();
                         remove.class_list().add_1("clickable")?;
                         remove.set_inner_text("Remove");
                         footer.append_child(&remove)?;
 
-                        let edit: HtmlElement = document().create_element("span")?.unchecked_into();
+                        let edit: HtmlElement =
+                            ctx.document.create_element("span")?.unchecked_into();
                         edit.class_list().add_1("clickable")?;
                         edit.set_inner_text("Edit");
                         footer.append_child(&edit)?;

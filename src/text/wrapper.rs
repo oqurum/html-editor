@@ -1,5 +1,4 @@
-use gloo_utils::document;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, Text};
 
 use crate::{component::FlagsWithData, ComponentFlag, Result};
@@ -129,7 +128,10 @@ impl WrappedText {
 }
 
 fn create_container(text_node: &Text, flag: FlagsWithData) -> Result<HtmlElement> {
-    let container = document().create_element("span")?;
+    let container = text_node
+        .owner_document()
+        .unwrap_throw()
+        .create_element("span")?;
     container.set_class_name(&flag.generate_class_name());
 
     if !flag.is_empty() {

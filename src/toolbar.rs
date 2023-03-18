@@ -1,7 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
 use chrono::{Duration, Utc};
-use gloo_utils::document;
 use wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt};
 use web_sys::{HtmlElement, MouseEvent, Selection};
 
@@ -23,6 +22,7 @@ pub struct Toolbar {
     func: ListenerEvent,
 
     buttons: Vec<Button>,
+    expanded_index: Option<usize>,
 }
 
 impl Toolbar {
@@ -34,6 +34,7 @@ impl Toolbar {
             buttons: Vec::new(),
             listeners: Vec::new(),
             func: func.clone(),
+            expanded_index: None,
         }
     }
 
@@ -55,22 +56,40 @@ impl Toolbar {
 
             style.set_property("top", &format!("{}px", y - HEIGHT - 3.0,))?;
 
-            document().body().unwrap_throw().append_child(popup)?;
+            self.listener_id
+                .document()
+                .body()
+                .unwrap_throw()
+                .append_child(popup)?;
         }
 
         Ok(())
     }
 
+    fn reload(&mut self, selection: Selection) -> Result<()> {
+        if let Some(popup) = self.popup.take() {
+            popup.remove();
+        }
+
+        self.open(selection)
+    }
+
     pub fn close(&mut self) {
         if let Some(popup) = self.popup.take() {
             popup.remove();
+            self.expanded_index = None;
         }
     }
 
     fn create_popup(&mut self) -> Result<()> {
-        let popup_element: HtmlElement = document().create_element("div")?.unchecked_into();
+        let popup_element: HtmlElement = self
+            .listener_id
+            .document()
+            .create_element("div")?
+            .unchecked_into();
         popup_element.set_class_name("toolbar");
 
+        self.buttons.clear();
         self.listeners.clear();
 
         let last_clicked = Rc::new(RefCell::new(Utc::now()));
@@ -97,59 +116,67 @@ impl Toolbar {
             let listener_id = self.listener_id;
             let func = self.func.clone();
             let data = self.data.clone();
+            let document = self.listener_id.document();
 
             let function = Closure::wrap(Box::new(move |e: MouseEvent| {
                 let click_element: HtmlElement = e.target_unchecked_into();
-                let is_held = Utc::now().signed_duration_since(*last_clicked.borrow())
-                    >= Duration::milliseconds(500);
+                let is_held = false;
+                // let is_held = Utc::now().signed_duration_since(*last_clicked.borrow())
+                //     >= Duration::milliseconds(500);
 
                 // Get the selection
-                if let Some(selection) = document()
+                if let Some(selection) = document
                     .get_selection()
                     .unwrap_throw()
                     .filter(|v| !v.is_collapsed())
                 {
                     {
                         let listener = listener_id.try_get().unwrap();
-                        let borrow = listener.borrow();
+                        let mut borrow = listener.borrow_mut();
 
-                        for button in &borrow.toolbar.buttons {
+                        for (idx, button) in borrow.toolbar.buttons.iter().enumerate() {
                             if parents_contains_element(
                                 click_element.unchecked_ref(),
                                 &button.element,
                             ) {
                                 match button.type_of {
                                     ComponentFlag::HIGHLIGHT => {
-                                        drop(borrow);
-
                                         if is_held {
-                                            // TODO
+                                            borrow.toolbar.expanded_index = Some(idx);
+                                            drop(borrow);
                                         } else {
-                                            let context = Context::new(Rc::new(RefCell::new(
-                                                selection::get_nodes_in_selection(
-                                                    selection.clone(),
-                                                    data.clone(),
-                                                )
-                                                .unwrap_throw(),
-                                            )));
+                                            drop(borrow);
+                                            let context = Context::new(
+                                                Rc::new(RefCell::new(
+                                                    selection::get_nodes_in_selection(
+                                                        selection.clone(),
+                                                        data.clone(),
+                                                    )
+                                                    .unwrap_throw(),
+                                                )),
+                                                document.clone(),
+                                            );
 
                                             Highlight.on_click_button(&context).unwrap_throw();
                                         }
                                     }
 
                                     ComponentFlag::NOTE => {
-                                        drop(borrow);
-
                                         if is_held {
-                                            // TODO
+                                            borrow.toolbar.expanded_index = Some(idx);
+                                            drop(borrow);
                                         } else {
-                                            let context = Context::new(Rc::new(RefCell::new(
-                                                selection::get_nodes_in_selection(
-                                                    selection.clone(),
-                                                    data.clone(),
-                                                )
-                                                .unwrap_throw(),
-                                            )));
+                                            drop(borrow);
+                                            let context = Context::new(
+                                                Rc::new(RefCell::new(
+                                                    selection::get_nodes_in_selection(
+                                                        selection.clone(),
+                                                        data.clone(),
+                                                    )
+                                                    .unwrap_throw(),
+                                                )),
+                                                document.clone(),
+                                            );
 
                                             Note.on_click_button(&context).unwrap_throw();
                                         }
@@ -163,8 +190,7 @@ impl Toolbar {
                                     let listener = listener_id.try_get().unwrap();
                                     let mut borrow = listener.borrow_mut();
 
-                                    borrow.toolbar.close();
-                                    if let Err(e) = borrow.toolbar.open(selection) {
+                                    if let Err(e) = borrow.toolbar.reload(selection) {
                                         log::error!("Failed to open toolbar: {e:?}");
                                     }
                                 }
@@ -188,7 +214,9 @@ impl Toolbar {
 
         self.popup = Some(popup_element);
 
-        let selected = if let Some(selection) = document()
+        let selected = if let Some(selection) = self
+            .listener_id
+            .document()
             .get_selection()
             .unwrap_throw()
             .filter(|v| !v.is_collapsed())
@@ -212,7 +240,19 @@ impl Toolbar {
     }
 
     fn create_button<C: Component + 'static>(&mut self, selected: &[ComponentFlag]) -> Result<()> {
-        let element: HtmlElement = document().create_element("div")?.unchecked_into();
+        if let Some(idx) = self.expanded_index {
+            if idx == self.buttons.len() {
+                // TODO: Create the expanded button
+
+                // return Ok(());
+            }
+        }
+
+        let element: HtmlElement = self
+            .listener_id
+            .document()
+            .create_element("div")?
+            .unchecked_into();
 
         element.set_inner_text(C::TITLE);
         element.set_class_name("button");

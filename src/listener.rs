@@ -4,7 +4,6 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use gloo_utils::document;
 use lazy_static::lazy_static;
 use serde::Serialize;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt};
@@ -12,6 +11,7 @@ use web_sys::{Document, Element, HtmlElement, MouseEvent, Node, Range, Text};
 
 use crate::{
     component::{ComponentDataStore, Context, FlagsWithData},
+    document,
     helper::{parents_contains_class, TargetCast},
     selection, store,
     text::{return_all_text_nodes, FoundWrappedTextRefMut, TextContentWithFlag},
@@ -39,10 +39,14 @@ pub enum MouseListener {
     Ignore,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ListenerId(usize);
 
 impl ListenerId {
+    pub fn document(&self) -> Document {
+        document::get_document(*self).unwrap_or_else(gloo_utils::document)
+    }
+
     pub fn unset() -> Self {
         Self(0)
     }
@@ -246,9 +250,14 @@ impl ListenerHandle {
             return Ok(());
         };
 
-        handle_listener_mouseclick(target, &self.0.to_class_string(), &Rc::downgrade(&listener))?;
+        handle_listener_mouseclick(
+            target,
+            &self.0.to_class_string(),
+            &self.0.document(),
+            &Rc::downgrade(&listener),
+        )?;
 
-        self.select_word_from_point(x, y, &gloo_utils::document())
+        self.select_word_from_point(x, y, &self.0.document())
     }
 
     /// Highlights' the word you clicked and opens the toolbar.
@@ -390,6 +399,8 @@ impl Drop for ListenerHandle {
             {
                 let listener = listeners.remove(index);
 
+                document::delete_document(listener.borrow().listener_id);
+
                 let listener_class = self.0.to_class_string();
 
                 let _ = listener
@@ -408,6 +419,7 @@ pub fn register_with_data(
     element: HtmlElement,
     mut data: ListenerData,
     listener: MouseListener,
+    document: Option<Document>,
     on_event: Option<ListenerEvent>,
 ) -> Result<ListenerHandle> {
     LISTENERS.with(|listeners| -> Result<ListenerHandle> {
@@ -425,6 +437,10 @@ pub fn register_with_data(
 
         let index = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
         let listener_class = index.to_class_string();
+
+        if let Some(document) = document {
+            document::register_document(index, document);
+        }
 
         data.listener_id = index;
         let listener_data = Rc::new(RefCell::new(data));
@@ -459,6 +475,7 @@ pub fn register_with_data(
 pub fn register(
     element: HtmlElement,
     listener: MouseListener,
+    document: Option<Document>,
     on_event: Option<ListenerEvent>,
 ) -> Result<ListenerHandle> {
     LISTENERS.with(|listeners| -> Result<ListenerHandle> {
@@ -476,6 +493,10 @@ pub fn register(
 
         let listener_id = ListenerId(INCREMENT.fetch_add(1, Ordering::Relaxed));
         let listener_class = listener_id.to_class_string();
+
+        if let Some(document) = document {
+            document::register_document(listener_id, document);
+        }
 
         let nodes = return_all_text_nodes(&element);
 
@@ -511,6 +532,7 @@ fn register_listener_events(
     listener_rc: &Rc<RefCell<Listener>>,
     listener_class: String,
 ) -> Result<()> {
+    let document = listener_rc.borrow().listener_id.document();
     let is_mouse_down = Rc::new(RefCell::new(false));
 
     // Create the mouse move listener
@@ -525,7 +547,7 @@ fn register_listener_events(
         });
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
-            document().unchecked_into(),
+            document.clone().unchecked_into(),
             function,
             |t, f| t.add_event_listener_with_callback("mousemove", f),
             Box::new(|t, f| t.remove_event_listener_with_callback("mousemove", f)),
@@ -548,7 +570,7 @@ fn register_listener_events(
         }) as Box<dyn Fn(MouseEvent)>);
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
-            document().unchecked_into(),
+            document.clone().unchecked_into(),
             function,
             |t, f| t.add_event_listener_with_callback("mouseup", f),
             Box::new(|t, f| t.remove_event_listener_with_callback("mouseup", f)),
@@ -566,7 +588,7 @@ fn register_listener_events(
         }) as Box<dyn Fn(MouseEvent)>);
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
-            document().unchecked_into(),
+            document.clone().unchecked_into(),
             function,
             |t, f| t.add_event_listener_with_callback("mousedown", f),
             Box::new(|t, f| t.remove_event_listener_with_callback("mousedown", f)),
@@ -575,14 +597,20 @@ fn register_listener_events(
 
     // Create the on click listener
     {
+        let document2 = document.clone();
         let listener = Rc::downgrade(listener_rc);
         let function: Closure<dyn FnMut(MouseEvent)> = Closure::new(move |event: MouseEvent| {
-            handle_listener_mouseclick(event.target_unchecked_into(), &listener_class, &listener)
-                .unwrap_throw();
+            handle_listener_mouseclick(
+                event.target_unchecked_into(),
+                &listener_class,
+                &document2,
+                &listener,
+            )
+            .unwrap_throw();
         });
 
         listener_rc.borrow_mut().functions.push(ElementEvent::link(
-            document().unchecked_into(),
+            document.unchecked_into(),
             function,
             |t, f| t.add_event_listener_with_callback("click", f),
             Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
@@ -595,13 +623,14 @@ fn register_listener_events(
 fn handle_listener_mouseclick(
     target: Element,
     listening_class: &str,
+    document: &Document,
     handler: &Weak<RefCell<Listener>>,
 ) -> Result<()> {
     if !parents_contains_class(target.clone(), listening_class) {
         return Ok(());
     }
 
-    if document().get_selection()?.unwrap_throw().is_collapsed() {
+    if document.get_selection()?.unwrap_throw().is_collapsed() {
         let handle = handler.upgrade().expect_throw("Upgrade Listener");
         let handle = handle.borrow();
         let data = handle.data.borrow();
@@ -638,16 +667,16 @@ fn handle_listener_mouseclick(
         for flag in flags.separate_bits() {
             match flag {
                 ComponentFlag::ITALICIZE => crate::component::Italicize
-                    .on_click(&Context::new(nodes.clone()))
+                    .on_click(&Context::new(nodes.clone(), document.clone()))
                     .unwrap_throw(),
                 ComponentFlag::HIGHLIGHT => crate::component::Highlight
-                    .on_click(&Context::new(nodes.clone()))
+                    .on_click(&Context::new(nodes.clone(), document.clone()))
                     .unwrap_throw(),
                 ComponentFlag::UNDERLINE => crate::component::Underline
-                    .on_click(&Context::new(nodes.clone()))
+                    .on_click(&Context::new(nodes.clone(), document.clone()))
                     .unwrap_throw(),
                 ComponentFlag::NOTE => crate::component::Note
-                    .on_click(&Context::new(nodes.clone()))
+                    .on_click(&Context::new(nodes.clone(), document.clone()))
                     .unwrap_throw(),
 
                 _ => unreachable!(),
@@ -662,7 +691,12 @@ fn display_toolbar(handler: &Weak<RefCell<Listener>>) -> Result<()> {
     let handler = handler.upgrade().expect_throw("Upgrade Listener");
     let mut handler = handler.borrow_mut();
 
-    if let Some(selection) = document().get_selection()?.filter(|v| !v.is_collapsed()) {
+    if let Some(selection) = handler
+        .listener_id
+        .document()
+        .get_selection()?
+        .filter(|v| !v.is_collapsed())
+    {
         handler.toolbar.open(selection)?;
     } else {
         handler.toolbar.close();
