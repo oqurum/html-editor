@@ -1,6 +1,6 @@
 use bytes::Buf;
 use serde::{Deserialize, Serialize};
-use web_sys::{HtmlElement, Text};
+use web_sys::{Document, HtmlElement, Text};
 
 use crate::{
     component::{ComponentDataStore, FlagsWithData, SingleFlagWithData},
@@ -14,6 +14,7 @@ pub fn load_and_register(
     container: HtmlElement,
     state: SaveState,
     listener: MouseListener,
+    document: Option<Document>,
     on_event: Option<ListenerEvent>,
 ) -> Result<ListenerHandle> {
     let nodes = return_all_text_nodes(&container);
@@ -22,6 +23,7 @@ pub fn load_and_register(
         container,
         state.into_listener_data(nodes)?,
         listener,
+        document,
         on_event,
     )
 }

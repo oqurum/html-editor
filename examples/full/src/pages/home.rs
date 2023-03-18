@@ -32,6 +32,7 @@ pub fn home() -> Html {
             let handle = editor::register(
                 node.cast::<HtmlElement>().unwrap_throw(),
                 MouseListener::All,
+                None,
                 Some(Rc::new(RefCell::new(move |id: ListenerId| {
                     let save = id.try_save();
 

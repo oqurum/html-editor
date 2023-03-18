@@ -17,6 +17,7 @@ pub use italicize::*;
 pub use list::*;
 pub use note::*;
 pub use underline::*;
+use web_sys::Document;
 
 use crate::{selection::NodeContainer, Result};
 
@@ -43,8 +44,6 @@ pub trait Component: Sized {
     fn on_click(&self, _ctx: &Context<Self>) -> Result<()> {
         Ok(())
     }
-
-    fn on_held(&self) {}
 
     fn does_selected_contain_self(nodes: &NodeContainer) -> bool {
         nodes.does_selected_contain(&FlagsWithData::new_flag(Self::FLAG))
@@ -101,14 +100,16 @@ impl ComponentDataStore {
 
 pub struct Context<D: Component> {
     pub nodes: Rc<RefCell<NodeContainer>>,
+    pub document: Document,
 
     _phantom: PhantomData<D>,
 }
 
 impl<D: Component> Context<D> {
-    pub fn new(nodes: Rc<RefCell<NodeContainer>>) -> Self {
+    pub fn new(nodes: Rc<RefCell<NodeContainer>>, document: Document) -> Self {
         Self {
             nodes,
+            document,
             _phantom: PhantomData::default(),
         }
     }
@@ -196,6 +197,7 @@ impl<D: Component> Clone for Context<D> {
     fn clone(&self) -> Self {
         Self {
             nodes: self.nodes.clone(),
+            document: self.document.clone(),
             _phantom: PhantomData::default(),
         }
     }

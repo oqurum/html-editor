@@ -1,6 +1,7 @@
 use wasm_bindgen::JsValue;
 
 pub mod component;
+mod document;
 mod gui;
 mod helper;
 mod listener;
