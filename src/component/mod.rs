@@ -210,6 +210,7 @@ bitflags! {
         const HIGHLIGHT = 0b0000_0010;
         const UNDERLINE = 0b0000_0100;
         const NOTE      = 0b0000_1000;
+        const LIST      = 0b0001_0000;
     }
 }
 

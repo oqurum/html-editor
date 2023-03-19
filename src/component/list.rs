@@ -12,7 +12,7 @@ pub struct List;
 
 impl Component for List {
     // No flag needed. We don't store anything in the DOM.
-    const FLAG: ComponentFlag = ComponentFlag::empty();
+    const FLAG: ComponentFlag = ComponentFlag::LIST;
     const TITLE: &'static str = "List";
 
     type Data = ();
@@ -49,30 +49,38 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
         });
     });
 
+    let modal = ctx.document.create_element("div")?;
+    modal.class_list().add_2("modal", "d-block")?;
+    modal.set_attribute("tabindex", "-1")?;
+
     let content = ctx.document.create_element("div")?;
-    content.class_list().add_1("popup")?;
+    content.class_list().add_1("modal-dialog")?;
+    modal.append_child(&content)?;
 
     let inner = ctx.document.create_element("div")?;
-    inner.class_list().add_1("popup-container")?;
+    inner.class_list().add_1("modal-content")?;
 
     {
         let header = ctx.document.create_element("div")?;
-        header.class_list().add_1("popup-header")?;
+        header.class_list().add_1("modal-header")?;
         inner.append_child(&header)?;
 
         let title: HtmlElement = ctx.document.create_element("h3")?.unchecked_into();
         title.set_inner_text("List");
         header.append_child(&title)?;
 
-        let cancel: HtmlElement = ctx.document.create_element("span")?.unchecked_into();
-        cancel.set_inner_text("X");
+        let cancel: HtmlElement = ctx.document.create_element("button")?.unchecked_into();
+        cancel.set_attribute("type", "button")?;
+        cancel.set_attribute("aria-label", "Close")?;
+        cancel.class_list().add_1("btn-close")?;
+
         header.append_child(&cancel)?;
         cancel.add_event_listener_with_callback("click", cancel_fn.as_ref().unchecked_ref())?;
     }
 
     {
         let body = ctx.document.create_element("div")?;
-        body.class_list().add_1("popup-body")?;
+        body.class_list().add_1("modal-body")?;
         inner.append_child(&body)?;
 
         let notes_and_highlights = ctx.document.create_element("div")?;
@@ -133,9 +141,12 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
     }
 
     content.append_child(&inner)?;
-    body().append_child(&content)?;
+    body().append_child(&modal)?;
 
-    let popup = Popup { content, cancel_fn };
+    let popup = Popup {
+        content: modal,
+        cancel_fn,
+    };
 
     // TODO: Replace with set once stable.
     DISPLAYING.with(move |v| {

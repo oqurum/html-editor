@@ -182,7 +182,24 @@ impl Toolbar {
                                         }
                                     }
 
-                                    _ => (),
+                                    ComponentFlag::LIST => {
+                                        drop(borrow);
+
+                                        let context = Context::new(
+                                            Rc::new(RefCell::new(
+                                                selection::get_nodes_in_selection(
+                                                    selection.clone(),
+                                                    data.clone(),
+                                                )
+                                                .unwrap_throw(),
+                                            )),
+                                            document.clone(),
+                                        );
+
+                                        List.on_click_button(&context).unwrap_throw();
+                                    }
+
+                                    _ => drop(borrow),
                                 }
 
                                 // Reload the toolbar
