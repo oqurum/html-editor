@@ -69,8 +69,11 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
         title.set_inner_text("List");
         header.append_child(&title)?;
 
-        let cancel: HtmlElement = ctx.document.create_element("button")?.unchecked_into();
-        cancel.set_attribute("type", "button")?;
+        let cancel: HtmlElement = ctx
+            .document
+            .create_element("editor-button")?
+            .unchecked_into();
+        cancel.set_attribute("type", "editor-button")?;
         cancel.set_attribute("aria-label", "Close")?;
         cancel.class_list().add_1("btn-close")?;
 
@@ -96,24 +99,26 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
             for text_cont in data.get_flagged_text() {
                 let flagged_container: HtmlElement =
                     ctx.document.create_element("div")?.unchecked_into();
-                flagged_container.class_list().add_1("flagged-item")?;
+                flagged_container
+                    .class_list()
+                    .add_1("editor-flagged-item")?;
 
                 // TODO: Allow for handling custom data.
 
                 let content: HtmlElement = ctx.document.create_element("p")?.unchecked_into();
-                content.class_list().add_1("content")?;
+                content.class_list().add_1("editor-content")?;
                 content.set_inner_text(&text_cont.content);
                 flagged_container.append_child(&content)?;
 
                 let footer = ctx.document.create_element("div")?;
-                footer.class_list().add_1("footer")?;
+                footer.class_list().add_1("editor-footer")?;
                 flagged_container.append_child(&footer)?;
 
                 match text_cont.flag {
                     ComponentFlag::HIGHLIGHT => {
                         let remove: HtmlElement =
                             ctx.document.create_element("span")?.unchecked_into();
-                        remove.class_list().add_1("clickable")?;
+                        remove.class_list().add_1("editor-clickable")?;
                         remove.set_inner_text("Remove");
                         footer.append_child(&remove)?;
                     }
@@ -121,13 +126,13 @@ fn show_popup(ctx: Context<List>) -> Result<(), JsValue> {
                     ComponentFlag::NOTE => {
                         let remove: HtmlElement =
                             ctx.document.create_element("span")?.unchecked_into();
-                        remove.class_list().add_1("clickable")?;
+                        remove.class_list().add_1("editor-clickable")?;
                         remove.set_inner_text("Remove");
                         footer.append_child(&remove)?;
 
                         let edit: HtmlElement =
                             ctx.document.create_element("span")?.unchecked_into();
-                        edit.class_list().add_1("clickable")?;
+                        edit.class_list().add_1("editor-clickable")?;
                         edit.set_inner_text("Edit");
                         footer.append_child(&edit)?;
                     }

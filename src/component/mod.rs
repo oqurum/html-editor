@@ -249,19 +249,19 @@ impl ComponentFlag {
         let mut classes = Vec::new();
 
         if self.contains(Self::ITALICIZE) {
-            classes.push("italicize");
+            classes.push("editor-italicize");
         }
 
         if self.contains(Self::HIGHLIGHT) {
-            classes.push("highlight");
+            classes.push("editor-highlight");
         }
 
         if self.contains(Self::UNDERLINE) {
-            classes.push("underline");
+            classes.push("editor-underline");
         }
 
         if self.contains(Self::NOTE) {
-            classes.push("note");
+            classes.push("editor-note");
         }
 
         classes.join(" ")

@@ -164,8 +164,11 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
         title.set_inner_text("Note");
         header.append_child(&title)?;
 
-        let cancel: HtmlElement = ctx.document.create_element("button")?.unchecked_into();
-        cancel.set_attribute("type", "button")?;
+        let cancel: HtmlElement = ctx
+            .document
+            .create_element("editor-button")?
+            .unchecked_into();
+        cancel.set_attribute("type", "editor-button")?;
         cancel.set_attribute("aria-label", "Close")?;
         cancel.class_list().add_1("btn-close")?;
 
@@ -202,7 +205,10 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
         footer.class_list().add_1("modal-footer")?;
         inner.append_child(&footer)?;
 
-        let save: HtmlElement = ctx.document.create_element("button")?.unchecked_into();
+        let save: HtmlElement = ctx
+            .document
+            .create_element("editor-button")?
+            .unchecked_into();
         save.class_list().add_2("btn", "btn-success")?;
         save.set_inner_text("Save");
         footer.append_child(&save)?;
@@ -213,7 +219,10 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
             Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
         ));
 
-        let cancel: HtmlElement = ctx.document.create_element("button")?.unchecked_into();
+        let cancel: HtmlElement = ctx
+            .document
+            .create_element("editor-button")?
+            .unchecked_into();
         cancel.class_list().add_2("btn", "btn-danger")?;
         cancel.set_inner_text("Cancel");
         footer.append_child(&cancel)?;
@@ -224,7 +233,10 @@ fn show_popup(editing_id: Option<u32>, ctx: Context<Note>) -> Result<(), JsValue
             Box::new(|t, f| t.remove_event_listener_with_callback("click", f)),
         ));
 
-        let delete: HtmlElement = ctx.document.create_element("button")?.unchecked_into();
+        let delete: HtmlElement = ctx
+            .document
+            .create_element("editor-button")?
+            .unchecked_into();
         delete.class_list().add_2("btn", "btn-danger")?;
         delete.set_inner_text("Delete");
         footer.append_child(&delete)?;

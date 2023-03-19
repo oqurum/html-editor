@@ -87,7 +87,7 @@ impl Toolbar {
             .document()
             .create_element("div")?
             .unchecked_into();
-        popup_element.set_class_name("toolbar");
+        popup_element.set_class_name("editor-toolbar");
 
         self.buttons.clear();
         self.listeners.clear();
@@ -120,9 +120,8 @@ impl Toolbar {
 
             let function = Closure::wrap(Box::new(move |e: MouseEvent| {
                 let click_element: HtmlElement = e.target_unchecked_into();
-                let is_held = false;
-                // let is_held = Utc::now().signed_duration_since(*last_clicked.borrow())
-                //     >= Duration::milliseconds(500);
+                let is_held = Utc::now().signed_duration_since(*last_clicked.borrow())
+                    >= Duration::milliseconds(500);
 
                 // Get the selection
                 if let Some(selection) = document
@@ -272,7 +271,7 @@ impl Toolbar {
             .unchecked_into();
 
         element.set_inner_text(C::TITLE);
-        element.set_class_name("button");
+        element.set_class_name("editor-button");
 
         self.popup.as_ref().unwrap().append_child(&element)?;
 
