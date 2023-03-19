@@ -262,11 +262,13 @@ impl ListenerHandle {
 
     /// Highlights' the word you clicked and opens the toolbar.
     fn select_word_from_point(&self, x: f32, y: f32, document: &Document) -> Result<(), JsValue> {
-        fn is_stop_break(value: &u8) -> bool {
+        fn is_stop_break(value: char) -> bool {
             [
-                b' ', b'.', b',', b'?', b'!', b'"', b'\'', b'*', b'(', b')', b';', b':',
+                ' ', '.', ',', '?', '!', '"', '*', '(', ')', ';', ':',
+                // Multi-byte characters.
+                '“',
             ]
-            .contains(value)
+            .contains(&value)
         }
 
         let Some(caret) = document.caret_position_from_point(x, y) else {
@@ -288,22 +290,33 @@ impl ListenerHandle {
             return Ok(());
         };
 
+        log::debug!("Node Value: {}", node_value);
+
         let node_offset = caret.offset() as usize;
 
         let mut start_offset = node_offset;
         let mut length = node_value.len();
 
+        log::debug!(
+            "Start Selected {}",
+            &node_value
+                .chars()
+                .skip(start_offset)
+                .take(2)
+                .collect::<String>()
+        );
+
         // TODO: Optimize. We need to check other Nodes.
         if node_value
-            .as_bytes()
-            .get(start_offset)
+            .chars()
+            .nth(start_offset)
             .map(is_stop_break)
             .unwrap_or_default()
         {
             start_offset += 1;
 
             for i in 0..length {
-                if let Some(next_byte) = node_value.as_bytes().get(start_offset + i) {
+                if let Some(next_byte) = node_value.chars().nth(start_offset + i) {
                     if is_stop_break(next_byte) {
                         length = i;
                         break;
@@ -315,7 +328,7 @@ impl ListenerHandle {
         } else {
             // Backtrack
             for i in (0..start_offset).rev() {
-                if is_stop_break(node_value.as_bytes().get(i).unwrap()) {
+                if is_stop_break(node_value.chars().nth(i).unwrap()) {
                     start_offset = i + 1;
                     break;
                 } else if i == 0 {
@@ -325,7 +338,7 @@ impl ListenerHandle {
 
             // Move until space
             for i in 0..length {
-                if let Some(next_byte) = node_value.as_bytes().get(node_offset + i) {
+                if let Some(next_byte) = node_value.chars().nth(node_offset + i) {
                     if is_stop_break(next_byte) {
                         length = node_offset - start_offset + i;
                         break;
@@ -360,9 +373,23 @@ impl ListenerHandle {
 
         // Check if we're out of bounds
         if node_value.len() < start_offset + length {
-            log::debug!("Invalid Selection");
+            log::debug!(
+                "Invalid Selection: Out of Bounds ({} + {} > {})",
+                start_offset,
+                length,
+                node_value.len()
+            );
             return Ok(());
         }
+
+        log::debug!(
+            "End Selection: {}",
+            node_value
+                .chars()
+                .skip(start_offset)
+                .take(length)
+                .collect::<String>()
+        );
 
         // Selection Range Changes
         selection.remove_all_ranges()?;
