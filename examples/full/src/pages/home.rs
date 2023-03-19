@@ -89,6 +89,7 @@ pub fn home() -> Html {
                         node.cast::<HtmlElement>().unwrap_throw(),
                         v.clone(),
                         MouseListener::All,
+                        None,
                         Some(Rc::new(RefCell::new(move |id: ListenerId| {
                             let save = id.try_save();
 
