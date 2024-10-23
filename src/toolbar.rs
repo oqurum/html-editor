@@ -13,6 +13,8 @@ use crate::{
     ComponentFlag, ListenerId, Result,
 };
 
+const HEIGHT: f64 = 30.0;
+
 pub struct Toolbar {
     pub popup: Option<HtmlElement>,
     listeners: Vec<ElementEvent>,
@@ -38,16 +40,10 @@ impl Toolbar {
         }
     }
 
-    pub fn open(&mut self, selection: Selection) -> Result<()> {
+    pub fn reposition(&mut self, selection: Selection) -> Result<()> {
         let range = selection.get_range_at(0)?;
         let bb = range.get_bounding_client_rect();
         let (x, y, selected_width) = (bb.x(), bb.y(), bb.width());
-
-        const HEIGHT: f64 = 30.0;
-
-        self.close();
-
-        self.create_popup()?;
 
         if let Some(popup) = self.popup.as_ref() {
             let style = popup.style();
@@ -55,7 +51,19 @@ impl Toolbar {
             style.set_property("left", &format!("{}px", x + selected_width / 2.0,))?;
 
             style.set_property("top", &format!("{}px", y - HEIGHT - 3.0,))?;
+        }
 
+        Ok(())
+    }
+
+    pub fn open(&mut self, selection: Selection) -> Result<()> {
+        self.close();
+
+        self.create_popup()?;
+
+        self.reposition(selection)?;
+
+        if let Some(popup) = self.popup.as_ref() {
             self.listener_id
                 .document()
                 .body()

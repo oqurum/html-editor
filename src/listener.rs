@@ -7,7 +7,7 @@ use std::{
 use lazy_static::lazy_static;
 use serde::Serialize;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt};
-use web_sys::{Document, Element, HtmlElement, MouseEvent, Node, Range, Text};
+use web_sys::{Document, Element, HtmlElement, MouseEvent, Node, Range, Selection, Text};
 
 use crate::{
     component::{ComponentDataStore, Context, FlagsWithData},
@@ -16,7 +16,7 @@ use crate::{
     selection, store,
     text::{return_all_text_nodes, FoundWrappedTextRefMut, TextContentWithFlag},
     toolbar::Toolbar,
-    util::ElementEvent,
+    util::{ElementEvent, LinePoint, RangeBox},
     Component, ComponentFlag, Result, TextContainer, WrappedText,
 };
 
@@ -26,7 +26,7 @@ pub type ListenerEvent = Rc<RefCell<dyn Fn(ListenerId)>>;
 // TODO: Fix. I don't like all these Rc's
 
 lazy_static! {
-    static ref INCREMENT: AtomicUsize = AtomicUsize::default();
+    static ref INCREMENT: AtomicUsize = AtomicUsize::new(1);
 }
 
 thread_local! {
@@ -236,6 +236,7 @@ pub struct Listener {
 }
 
 /// Keeps the listener active until we're dropped.
+// TODO: Use Rc ? Would allow for ref counts
 pub struct ListenerHandle(ListenerId);
 
 impl ListenerHandle {
@@ -243,11 +244,102 @@ impl ListenerHandle {
         Self(ListenerId::unset())
     }
 
-    /// Selects a word from the point you clicked and will also call `on_click` for a component.
-    pub fn click_or_select(&self, x: f32, y: f32, target: Element) -> Result<()> {
+    pub fn resize_selection_to(&self, is_start: bool, x: f32, y: f32) -> Result<RangeBox> {
+        let document = self.0.document();
+
         let Some(listener) = self.0.try_get() else {
-            log::debug!("Unable to acquire listener. Does it still exist?");
+            warn!("Unable to acquire listener. Does it still exist?");
+            return Ok(RangeBox::default());
+        };
+
+        let Some(selection) = document.get_selection()? else {
+            warn!("Unable to get selection");
+            return Ok(RangeBox::default());
+        };
+
+        let Some(caret) = document.caret_position_from_point(x, y) else {
+            warn!("Unable to get Caret Position");
+            return Ok(RangeBox::default());
+        };
+
+        let node_offset = caret.offset();
+
+        let Some(node) = caret.offset_node() else {
+            warn!("Unable to find Caret Offset Node");
+            return Ok(RangeBox::default());
+        };
+
+        let range = selection.get_range_at(0)?;
+
+        if is_start {
+            range.set_start(&node, node_offset)?;
+        } else {
+            range.set_end(&node, node_offset)?;
+        }
+
+        let rect_list = range.get_client_rects().unwrap_throw();
+
+        if rect_list.length() == 0 {
+            return Ok(RangeBox::default());
+        }
+
+        let start = rect_list.get(0).unwrap_throw();
+        let end = rect_list.get(rect_list.length() - 1).unwrap_throw();
+
+        reposition_toolbar(&listener, selection)?;
+
+        // TODO: Return new range list?
+
+        Ok(RangeBox {
+            start: LinePoint {
+                x: start.x(),
+                y: start.y(),
+                height: start.height(),
+            },
+            end: LinePoint {
+                x: end.right(),
+                y: end.y(),
+                height: end.height(),
+            },
+        })
+    }
+
+    pub fn has_selection(&self) -> Result<bool> {
+        let document = self.0.document();
+
+        let Some(selection) = document.get_selection()? else {
+            log::warn!("Unable to get selection");
+            return Ok(false);
+        };
+
+        Ok(selection.range_count() != 0)
+    }
+
+    pub fn unselect(&self) -> Result<()> {
+        let Some(listener) = self.0.try_get() else {
+            log::warn!("Unable to acquire listener. Does it still exist?");
             return Ok(());
+        };
+
+        let document = self.0.document();
+
+        let Some(selection) = document.get_selection()? else {
+            log::warn!("Unable to get selection");
+            return Ok(());
+        };
+
+        close_toolbar(&listener)?;
+
+        selection.remove_all_ranges()?;
+
+        Ok(())
+    }
+
+    /// Selects a word from the point you clicked and will also call `on_click` for a component.
+    pub fn click_or_select(&self, x: f32, y: f32, target: Element) -> Result<RangeBox> {
+        let Some(listener) = self.0.try_get() else {
+            log::warn!("Unable to acquire listener. Does it still exist?");
+            return Ok(RangeBox::default());
         };
 
         handle_listener_mouseclick(
@@ -261,7 +353,12 @@ impl ListenerHandle {
     }
 
     /// Highlights' the word you clicked and opens the toolbar.
-    fn select_word_from_point(&self, x: f32, y: f32, document: &Document) -> Result<(), JsValue> {
+    fn select_word_from_point(
+        &self,
+        x: f32,
+        y: f32,
+        document: &Document,
+    ) -> Result<RangeBox, JsValue> {
         fn is_stop_break(value: char) -> bool {
             [
                 ' ', '.', ',', '?', '!', '"', '*', '(', ')', ';', ':',
@@ -272,22 +369,22 @@ impl ListenerHandle {
         }
 
         let Some(caret) = document.caret_position_from_point(x, y) else {
-            log::debug!("Unable to get Caret Position");
-            return Ok(());
+            log::warn!("Unable to get Caret Position");
+            return Ok(RangeBox::default());
         };
 
         let Some(node) = caret.offset_node() else {
-            log::debug!("Unable to find Caret Offset Node");
-            return Ok(());
+            log::warn!("Unable to find Caret Offset Node");
+            return Ok(RangeBox::default());
         };
 
         if !parents_contains_class(node.parent_element().unwrap(), &self.0.to_class_string()) {
-            return Ok(());
+            return Ok(RangeBox::default());
         }
 
         let Some(node_value) = node.node_value() else {
-            log::debug!("Unable to get Node Value");
-            return Ok(());
+            log::warn!("Unable to get Node Value");
+            return Ok(RangeBox::default());
         };
 
         log::debug!("Node Value: {}", node_value);
@@ -298,7 +395,7 @@ impl ListenerHandle {
         let mut length = node_value.len();
 
         log::debug!(
-            "Start Selected {}",
+            "Cursor Selected {}",
             &node_value
                 .chars()
                 .skip(start_offset)
@@ -350,13 +447,13 @@ impl ListenerHandle {
         }
 
         let Some(selection) = document.get_selection()? else {
-            log::debug!("Unable to get selection");
-            return Ok(());
+            log::warn!("Unable to get selection");
+            return Ok(RangeBox::default());
         };
 
         let Some(listener) = self.0.try_get() else {
-            log::debug!("Unable to acquire listener. Does it still exist?");
-            return Ok(());
+            log::warn!("Unable to acquire listener. Does it still exist?");
+            return Ok(RangeBox::default());
         };
 
         let handler = Rc::downgrade(&listener);
@@ -367,23 +464,23 @@ impl ListenerHandle {
         }
 
         if start_offset == start_offset + length {
-            log::debug!("Unable to find word");
-            return Ok(());
+            log::warn!("Unable to find word");
+            return Ok(RangeBox::default());
         }
 
         // Check if we're out of bounds
         if node_value.len() < start_offset + length {
-            log::debug!(
+            log::warn!(
                 "Invalid Selection: Out of Bounds ({} + {} > {})",
                 start_offset,
                 length,
                 node_value.len()
             );
-            return Ok(());
+            return Ok(RangeBox::default());
         }
 
         log::debug!(
-            "End Selection: {}",
+            "Word Selection: {}",
             node_value
                 .chars()
                 .skip(start_offset)
@@ -405,7 +502,22 @@ impl ListenerHandle {
 
         display_toolbar(&handler)?;
 
-        Ok(())
+        let ranges = range.get_client_rects().unwrap_throw();
+        let start = ranges.get(0).unwrap_throw();
+        let end = ranges.get(ranges.length() - 1).unwrap_throw();
+
+        Ok(RangeBox {
+            start: LinePoint {
+                x: start.x(),
+                y: start.y(),
+                height: start.height(),
+            },
+            end: LinePoint {
+                x: end.right(),
+                y: end.y(),
+                height: end.height(),
+            },
+        })
     }
 }
 
@@ -556,7 +668,7 @@ pub fn register(
 }
 
 fn register_listener_events(
-    listener_rc: &Rc<RefCell<Listener>>,
+    listener_rc: &SharedListenerType,
     listener_class: String,
 ) -> Result<()> {
     let document = listener_rc.borrow().listener_id.document();
@@ -728,6 +840,22 @@ fn display_toolbar(handler: &Weak<RefCell<Listener>>) -> Result<()> {
     } else {
         handler.toolbar.close();
     }
+
+    Ok(())
+}
+
+fn close_toolbar(handler: &SharedListenerType) -> Result<()> {
+    let mut handler = handler.borrow_mut();
+
+    handler.toolbar.close();
+
+    Ok(())
+}
+
+fn reposition_toolbar(handler: &SharedListenerType, selection: Selection) -> Result<()> {
+    let mut handler = handler.borrow_mut();
+
+    handler.toolbar.reposition(selection)?;
 
     Ok(())
 }

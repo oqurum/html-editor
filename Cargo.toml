@@ -1,7 +1,5 @@
 [workspace]
-members = [
-	"examples/*"
-]
+members = ["examples/*"]
 
 [package]
 name = "editor"
@@ -45,6 +43,7 @@ features = [
 	"MouseEvent",
 	"CssStyleDeclaration",
 	"DomTokenList",
+	"DomRectList",
 	"DomRect",
 	"CaretPosition",
 	"Selection",

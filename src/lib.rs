@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use wasm_bindgen::JsValue;
 
 pub mod component;
@@ -20,5 +23,6 @@ pub use listener::{
 };
 pub use store::{load_and_register, save, SaveState, SavedNode, SavedNodeFlag};
 pub use text::{TextContainer, WrappedText};
+pub use util::{LinePoint, RangeBox};
 
 pub(crate) use listener::SharedListenerData;

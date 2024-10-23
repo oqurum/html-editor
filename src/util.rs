@@ -43,3 +43,16 @@ impl Drop for ElementEvent {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RangeBox {
+    pub start: LinePoint,
+    pub end: LinePoint,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct LinePoint {
+    pub x: f64,
+    pub y: f64,
+    pub height: f64,
+}
