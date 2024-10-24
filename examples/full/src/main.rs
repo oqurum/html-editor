@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
 
+#[macro_use]
+extern crate log;
+
 use wasm_bindgen::prelude::*;
 
 mod app;
