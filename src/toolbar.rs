@@ -215,7 +215,7 @@ impl Toolbar {
                                     let mut borrow = listener.borrow_mut();
 
                                     if let Err(e) = borrow.toolbar.reload(selection) {
-                                        log::error!("Failed to open toolbar: {e:?}");
+                                        error!("Failed to open toolbar: {e:?}");
                                     }
                                 }
 

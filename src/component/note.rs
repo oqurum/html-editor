@@ -22,7 +22,7 @@ impl Component for Note {
     type Data = ();
 
     fn on_click_button(&self, ctx: &Context<Self>) -> Result<()> {
-        log::debug!("Note - Selected {}", ctx.get_selection_data_ids().len());
+        debug!("Note - Selected {}", ctx.get_selection_data_ids().len());
 
         show_popup(None, ctx.clone())?;
 
@@ -30,7 +30,7 @@ impl Component for Note {
     }
 
     fn on_click(&self, ctx: &Context<Self>) -> Result<()> {
-        log::info!("on_click");
+        info!("on_click");
 
         for (clicked_flag, id) in ctx.get_selection_data_ids() {
             if clicked_flag == Self::FLAG {

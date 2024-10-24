@@ -11,7 +11,7 @@ impl Component for Underline {
     type Data = ();
 
     fn on_click_button(&self, ctx: &Context<Self>) -> Result<()> {
-        log::debug!("Underline");
+        debug!("Underline");
 
         ctx.nodes.borrow_mut().toggle_selection::<Self>()?;
 

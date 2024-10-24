@@ -18,7 +18,7 @@ impl Component for List {
     type Data = ();
 
     fn on_click_button(&self, ctx: &Context<Self>) -> Result<()> {
-        log::debug!("List");
+        debug!("List");
 
         show_popup(ctx.clone())?;
 

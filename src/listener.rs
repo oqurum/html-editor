@@ -308,7 +308,7 @@ impl ListenerHandle {
         let document = self.0.document();
 
         let Some(selection) = document.get_selection()? else {
-            log::warn!("Unable to get selection");
+            warn!("Unable to get selection");
             return Ok(false);
         };
 
@@ -317,14 +317,14 @@ impl ListenerHandle {
 
     pub fn unselect(&self) -> Result<()> {
         let Some(listener) = self.0.try_get() else {
-            log::warn!("Unable to acquire listener. Does it still exist?");
+            warn!("Unable to acquire listener. Does it still exist?");
             return Ok(());
         };
 
         let document = self.0.document();
 
         let Some(selection) = document.get_selection()? else {
-            log::warn!("Unable to get selection");
+            warn!("Unable to get selection");
             return Ok(());
         };
 
@@ -338,7 +338,7 @@ impl ListenerHandle {
     /// Selects a word from the point you clicked and will also call `on_click` for a component.
     pub fn click_or_select(&self, x: f32, y: f32, target: Element) -> Result<RangeBox> {
         let Some(listener) = self.0.try_get() else {
-            log::warn!("Unable to acquire listener. Does it still exist?");
+            warn!("Unable to acquire listener. Does it still exist?");
             return Ok(RangeBox::default());
         };
 
@@ -369,12 +369,12 @@ impl ListenerHandle {
         }
 
         let Some(caret) = document.caret_position_from_point(x, y) else {
-            log::warn!("Unable to get Caret Position");
+            warn!("Unable to get Caret Position");
             return Ok(RangeBox::default());
         };
 
         let Some(node) = caret.offset_node() else {
-            log::warn!("Unable to find Caret Offset Node");
+            warn!("Unable to find Caret Offset Node");
             return Ok(RangeBox::default());
         };
 
@@ -383,18 +383,18 @@ impl ListenerHandle {
         }
 
         let Some(node_value) = node.node_value() else {
-            log::warn!("Unable to get Node Value");
+            warn!("Unable to get Node Value");
             return Ok(RangeBox::default());
         };
 
-        log::debug!("Node Value: {}", node_value);
+        debug!("Node Value: {}", node_value);
 
         let node_offset = caret.offset() as usize;
 
         let mut start_offset = node_offset;
         let mut length = node_value.len();
 
-        log::debug!(
+        debug!(
             "Cursor Selected {}",
             &node_value
                 .chars()
@@ -447,12 +447,12 @@ impl ListenerHandle {
         }
 
         let Some(selection) = document.get_selection()? else {
-            log::warn!("Unable to get selection");
+            warn!("Unable to get selection");
             return Ok(RangeBox::default());
         };
 
         let Some(listener) = self.0.try_get() else {
-            log::warn!("Unable to acquire listener. Does it still exist?");
+            warn!("Unable to acquire listener. Does it still exist?");
             return Ok(RangeBox::default());
         };
 
@@ -464,13 +464,13 @@ impl ListenerHandle {
         }
 
         if start_offset == start_offset + length {
-            log::warn!("Unable to find word");
+            warn!("Unable to find word");
             return Ok(RangeBox::default());
         }
 
         // Check if we're out of bounds
         if node_value.len() < start_offset + length {
-            log::warn!(
+            warn!(
                 "Invalid Selection: Out of Bounds ({} + {} > {})",
                 start_offset,
                 length,
@@ -479,7 +479,7 @@ impl ListenerHandle {
             return Ok(RangeBox::default());
         }
 
-        log::debug!(
+        debug!(
             "Word Selection: {}",
             node_value
                 .chars()
@@ -548,7 +548,7 @@ impl Drop for ListenerHandle {
                     .class_list()
                     .remove_1(&listener_class);
 
-                log::debug!("Dropping Handle {:?}", self.0);
+                debug!("Dropping Handle {:?}", self.0);
             }
         });
     }

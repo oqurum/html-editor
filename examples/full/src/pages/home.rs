@@ -100,7 +100,7 @@ pub fn home() -> Html {
                     ) {
                         Ok(v) => v,
                         Err(e) => {
-                            log::error!("{e:?}");
+                            error!("{e:?}");
                             return;
                         }
                     };
@@ -109,7 +109,7 @@ pub fn home() -> Html {
                     *last_save.borrow_mut() = Some(v);
                 }
                 Ok(None) => (),
-                Err(e) => log::error!("Loading {e:?}"),
+                Err(e) => error!("Loading {e:?}"),
             }
         })
     };

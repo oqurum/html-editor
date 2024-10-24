@@ -15,7 +15,7 @@ impl Component for Highlight {
     type Data = HighlightTypes;
 
     fn on_click_button(&self, ctx: &Context<Self>) -> Result<()> {
-        log::debug!("Highlight");
+        debug!("Highlight");
 
         ctx.nodes.borrow_mut().toggle_selection::<Self>()?;
 

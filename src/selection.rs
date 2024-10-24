@@ -120,7 +120,7 @@ impl NodeContainer {
         if self.does_selected_intersect(D::ALLOWED_SIBLINGS.complement()) {
             // If Allowed Siblings is empty and we don't overwrite the non-allowed ones.
             if D::ALLOWED_SIBLINGS.is_empty() && !D::OVERWRITE_INVALID {
-                log::debug!("Unable to insert. Inserting on invalid ");
+                debug!("Unable to insert. Inserting on invalid ");
                 return Ok(Err("Unable to add this Component"));
             } else {
                 // Split and unset invalid
@@ -141,7 +141,7 @@ impl NodeContainer {
             }
         }
 
-        log::debug!("set component");
+        debug!("set component");
 
         self.split_and_acq_text_nodes()?;
 
@@ -161,7 +161,7 @@ impl NodeContainer {
         let flag =
             FlagsWithData::new_with_data(D::FLAG, data.unwrap_or_else(D::get_default_data_id));
 
-        log::debug!("unset component");
+        debug!("unset component");
 
         // TODO: Should I split when removing selection?
         // self.split_and_acq_text_nodes()?;
@@ -183,14 +183,14 @@ impl NodeContainer {
         let flag = FlagsWithData::new_with_data(D::FLAG, D::get_default_data_id());
 
         if self.does_selected_intersect(D::ALLOWED_SIBLINGS.complement()) {
-            log::error!("Not Allowed");
+            error!("Not Allowed");
             return Ok(false);
         }
 
         self.split_and_acq_text_nodes()?;
 
         if self.does_selected_contain(&flag) {
-            log::debug!("unset component");
+            debug!("unset component");
 
             let page_data = self.data.upgrade().expect_throw("data upgrade");
             let mut page_data = page_data.borrow_mut();
@@ -199,7 +199,7 @@ impl NodeContainer {
                 page_data.remove_component_node_flag(text, &flag)?;
             }
         } else {
-            log::debug!("set component");
+            debug!("set component");
 
             let page_data = self.data.upgrade().expect_throw("data upgrade");
             let mut page_data = page_data.borrow_mut();
@@ -223,13 +223,13 @@ impl NodeContainer {
 
         match self.nodes.len().cmp(&1) {
             std::cmp::Ordering::Equal => {
-                log::debug!("Range::select_node");
+                debug!("Range::select_node");
 
                 range.select_node_contents(&self.nodes[0])?;
             }
 
             std::cmp::Ordering::Greater => {
-                log::debug!("Range::set_start");
+                debug!("Range::set_start");
 
                 let start = &self.nodes[0];
                 let end = &self.nodes[self.nodes.len() - 1];
@@ -291,18 +291,18 @@ impl NodeContainer {
         // If component node already exists.
         let mut comp_node = page_data.get_text_container_mut(&text).unwrap_throw();
 
-        log::debug!("Node cached");
+        debug!("Node cached");
 
         if let Some(end_offset) = end_offset {
             if end_offset != text.length() {
-                log::debug!(" - splitting end: {} != {}", end_offset, text.length());
+                debug!(" - splitting end: {} != {}", end_offset, text.length());
 
                 comp_node.split_node(&text, end_offset)?;
             }
         }
 
         if let Some(start_offset) = start_offset.filter(|v| *v != 0) {
-            log::debug!(" - splitting start: {}", start_offset);
+            debug!(" - splitting start: {}", start_offset);
 
             let right_text = comp_node.split_node(&text, start_offset)?;
 
@@ -335,7 +335,7 @@ pub fn get_nodes_in_selection(
     // Check for our start_offset the same length as the first node.
     // I don't know what causes it but it does happen randomly.
     if !nodes.is_empty() && start_offset == nodes[0].length() {
-        log::debug!(
+        debug!(
             "Removing Text Node which was included though our start_offset was at the end of it"
         );
         nodes.remove(0);

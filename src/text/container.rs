@@ -137,10 +137,10 @@ impl Drop for TextContainer {
             .enumerate()
             .find(|(_, v)| !v.are_flags_empty())
         {
-            let _ = comp.remove_all_flag().map_err(|e| log::error!("{e:?}"));
+            let _ = comp.remove_all_flag().map_err(|e| error!("{e:?}"));
 
             let _ = try_join_component_into_surroundings(index, &mut self.text)
-                .map_err(|e| log::error!("{e:?}"));
+                .map_err(|e| error!("{e:?}"));
         }
     }
 }
